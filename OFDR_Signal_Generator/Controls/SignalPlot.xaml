@@ -1,0 +1,21 @@
+﻿<UserControl x:Class="OFDR_Signal_Generator.Controls.SignalPlot"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             MinHeight="220"
+             MinWidth="300">
+    <Border Background="#FF0F172A"
+            BorderBrush="#FFCBD5E1"
+            BorderThickness="1"
+            CornerRadius="10"
+            Padding="4">
+        <Grid>
+            <Canvas x:Name="PlotCanvas" ClipToBounds="True" />
+            <TextBlock x:Name="EmptyStateText"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Foreground="#FF94A3B8"
+                       FontSize="14"
+                       Text="No stage data yet." />
+        </Grid>
+    </Border>
+</UserControl>

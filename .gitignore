@@ -1,0 +1,14 @@
+.vs/
+*.user
+*.suo
+*.cache
+
+bin/
+obj/
+
+build_verify/
+build_verify_csv/
+build_verify_ifft/
+build_verify_segments/
+build_verify_shift/
+build_verify_validation/
