@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace OFDR_Signal_Generator.Models
 {
@@ -16,6 +16,14 @@ namespace OFDR_Signal_Generator.Models
 
         public double RawBaselineOffset { get; set; }
 
+        public bool UseRawSineSignal { get; set; }
+
+        public double RawSineFrequency { get; set; }
+
+        public double RawSineAmplitude { get; set; }
+
+        public double RawSinePhaseDegrees { get; set; }
+
         public double ReferenceAmplitude { get; set; }
 
         public int ReferenceDelaySamples { get; set; }
@@ -27,6 +35,14 @@ namespace OFDR_Signal_Generator.Models
         public double ReferenceBaselineOffset { get; set; }
 
         public double ReferencePhaseShiftDegrees { get; set; }
+
+        public bool UseReferenceSineSignal { get; set; }
+
+        public double ReferenceSineFrequency { get; set; }
+
+        public double ReferenceSineAmplitude { get; set; }
+
+        public double ReferenceSinePhaseDegrees { get; set; }
 
         public int FftZeroPadFactor { get; set; }
 

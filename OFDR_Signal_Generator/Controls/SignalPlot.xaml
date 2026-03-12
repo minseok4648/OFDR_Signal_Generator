@@ -1,4 +1,4 @@
-<UserControl x:Class="OFDR_Signal_Generator.Controls.SignalPlot"
+﻿<UserControl x:Class="OFDR_Signal_Generator.Controls.SignalPlot"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              MinHeight="220"
@@ -13,7 +13,40 @@
                     ClipToBounds="True"
                     Background="Transparent"
                     MouseMove="PlotCanvas_OnMouseMove"
-                    MouseLeave="PlotCanvas_OnMouseLeave" />
+                    MouseLeave="PlotCanvas_OnMouseLeave"
+                    MouseLeftButtonDown="PlotCanvas_OnMouseLeftButtonDown"
+                    MouseLeftButtonUp="PlotCanvas_OnMouseLeftButtonUp" />
+
+            <Rectangle x:Name="SelectionRectangle"
+                       Visibility="Collapsed"
+                       Stroke="#FF7DD3FC"
+                       Fill="#337DD3FC"
+                       StrokeThickness="1"
+                       RadiusX="2"
+                       RadiusY="2"
+                       IsHitTestVisible="False"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Top" />
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,8,8,0">
+                <Button Content="Zoom Out"
+                        Click="ZoomOutButton_OnClick"
+                        Padding="10,4"
+                        Margin="0,0,6,0"
+                        Background="#FF1E293B"
+                        BorderBrush="#FF475569"
+                        Foreground="White" />
+                <Button Content="Reset"
+                        Click="ResetZoomButton_OnClick"
+                        Padding="10,4"
+                        Background="#FF1E293B"
+                        BorderBrush="#FF475569"
+                        Foreground="White" />
+            </StackPanel>
+
             <Border x:Name="HoverPopup"
                     Visibility="Collapsed"
                     HorizontalAlignment="Left"
@@ -28,6 +61,15 @@
                            Foreground="White"
                            FontSize="12" />
             </Border>
+
+            <TextBlock x:Name="InteractionHintText"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Top"
+                       Margin="10,8,0,0"
+                       Foreground="#FF94A3B8"
+                       FontSize="11"
+                       Text="Drag to zoom, Zoom Out to step back, Reset to full view" />
+
             <TextBlock x:Name="EmptyStateText"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -9,6 +9,35 @@ namespace OFDR_Signal_Generator.Services
 {
     public sealed class CsvSignalLoader
     {
+        public void SaveSignal(string path, Complex[] complexSamples, double sampleSpacing)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new ArgumentException("CSV path is required.", nameof(path));
+            }
+
+            complexSamples = complexSamples ?? new Complex[0];
+            sampleSpacing = Math.Max(0.0, sampleSpacing);
+
+            using (var writer = new StreamWriter(path, false))
+            {
+                writer.WriteLine("Index,Time_norm,Amplitude,I_Re,Q_Im");
+                for (var index = 0; index < complexSamples.Length; index++)
+                {
+                    var sample = complexSamples[index];
+                    var time = sampleSpacing <= 0.0 ? index : index * sampleSpacing;
+                    writer.WriteLine(string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0},{1:F9},{2:F12},{3:F12},{4:F12}",
+                        index,
+                        time,
+                        sample.Magnitude,
+                        sample.Real,
+                        sample.Imaginary));
+                }
+            }
+        }
+
         public LoadedSignalData Load(string path)
         {
             if (string.IsNullOrWhiteSpace(path))

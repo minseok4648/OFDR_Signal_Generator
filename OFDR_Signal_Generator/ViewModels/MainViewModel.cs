@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -26,6 +26,7 @@ namespace OFDR_Signal_Generator.ViewModels
         private StageResult selectedStage;
         private int selectedSegmentIndex;
         private string selectedConjMulViewMode;
+        private int selectedCorrelationLag;
         private string selectedFinalMetricMode;
         private int sampleCount;
         private double sampleSpacing;
@@ -33,12 +34,20 @@ namespace OFDR_Signal_Generator.ViewModels
         private double rawNoiseLevel;
         private double rawAttenuation;
         private double rawBaselineOffset;
+        private bool useRawSineSignal;
+        private double rawSineFrequency;
+        private double rawSineAmplitude;
+        private double rawSinePhaseDegrees;
         private double referenceAmplitude;
         private int referenceDelaySamples;
         private double referenceWidth;
         private double referenceNoiseLevel;
         private double referenceBaselineOffset;
         private double referencePhaseShiftDegrees;
+        private bool useReferenceSineSignal;
+        private double referenceSineFrequency;
+        private double referenceSineAmplitude;
+        private double referenceSinePhaseDegrees;
         private int fftZeroPadFactor;
         private bool useHannWindow;
         private int segmentSize;
@@ -72,6 +81,7 @@ namespace OFDR_Signal_Generator.ViewModels
             });
             selectedSegmentIndex = -1;
             selectedConjMulViewMode = "Magnitude";
+            selectedCorrelationLag = 0;
             selectedFinalMetricMode = SignalProcessingPipeline.FinalMetricAbsolutePeakOffset;
 
             GenerateSignalCommand = new RelayCommand(GenerateSignal);
@@ -83,6 +93,7 @@ namespace OFDR_Signal_Generator.ViewModels
             LoadReferenceCsvCommand = new RelayCommand(LoadReferenceCsv);
             ClearRawCsvCommand = new RelayCommand(ClearRawCsv);
             ClearReferenceCsvCommand = new RelayCommand(ClearReferenceCsv);
+            ExportReconstructedRawCsvCommand = new RelayCommand(ExportReconstructedRawCsv);
 
             ResetDefaults();
         }
@@ -120,6 +131,8 @@ namespace OFDR_Signal_Generator.ViewModels
             get { return removeEventCommand; }
         }
 
+
+        public RelayCommand ExportReconstructedRawCsvCommand { get; private set; }
         public RelayCommand ResetDefaultsCommand { get; private set; }
 
         public int SampleCount
@@ -158,6 +171,30 @@ namespace OFDR_Signal_Generator.ViewModels
             set { SetProperty(ref rawBaselineOffset, value); }
         }
 
+        public bool UseRawSineSignal
+        {
+            get { return useRawSineSignal; }
+            set { SetProperty(ref useRawSineSignal, value); }
+        }
+
+        public double RawSineFrequency
+        {
+            get { return rawSineFrequency; }
+            set { SetProperty(ref rawSineFrequency, value); }
+        }
+
+        public double RawSineAmplitude
+        {
+            get { return rawSineAmplitude; }
+            set { SetProperty(ref rawSineAmplitude, value); }
+        }
+
+        public double RawSinePhaseDegrees
+        {
+            get { return rawSinePhaseDegrees; }
+            set { SetProperty(ref rawSinePhaseDegrees, value); }
+        }
+
         public double ReferenceAmplitude
         {
             get { return referenceAmplitude; }
@@ -192,6 +229,30 @@ namespace OFDR_Signal_Generator.ViewModels
         {
             get { return referencePhaseShiftDegrees; }
             set { SetProperty(ref referencePhaseShiftDegrees, value); }
+        }
+
+        public bool UseReferenceSineSignal
+        {
+            get { return useReferenceSineSignal; }
+            set { SetProperty(ref useReferenceSineSignal, value); }
+        }
+
+        public double ReferenceSineFrequency
+        {
+            get { return referenceSineFrequency; }
+            set { SetProperty(ref referenceSineFrequency, value); }
+        }
+
+        public double ReferenceSineAmplitude
+        {
+            get { return referenceSineAmplitude; }
+            set { SetProperty(ref referenceSineAmplitude, value); }
+        }
+
+        public double ReferenceSinePhaseDegrees
+        {
+            get { return referenceSinePhaseDegrees; }
+            set { SetProperty(ref referenceSinePhaseDegrees, value); }
         }
 
         public int FftZeroPadFactor
@@ -325,6 +386,93 @@ namespace OFDR_Signal_Generator.ViewModels
             }
         }
 
+        public int SelectedCorrelationLag
+        {
+            get { return selectedCorrelationLag; }
+            set
+            {
+                var bounds = GetSelectedCorrelationLagBounds();
+                var clamped = Math.Max(bounds.Item1, Math.Min(bounds.Item2, value));
+                if (SetProperty(ref selectedCorrelationLag, clamped))
+                {
+                    NotifyCorrelationInspectorChanged();
+                    RebuildStageResults(SelectedStage == null ? null : SelectedStage.Name);
+                }
+            }
+        }
+
+        public int SelectedCorrelationLagMinimum
+        {
+            get { return GetSelectedCorrelationLagBounds().Item1; }
+        }
+
+        public int SelectedCorrelationLagMaximum
+        {
+            get { return GetSelectedCorrelationLagBounds().Item2; }
+        }
+
+        public bool IsCorrelationInspectorVisible
+        {
+            get { return HasSelectedSegment() && SelectedStage != null && string.Equals(SelectedStage.Name, "X-Corr", StringComparison.Ordinal); }
+        }
+
+        public string SelectedCorrelationLagSummary
+        {
+            get
+            {
+                if (!HasSelectedSegment())
+                {
+                    return "Select and run a segment to inspect lag-by-lag overlap between the Raw and Ref segment IFFT signals.";
+                }
+
+                var segmentIndex = SelectedSegmentIndex;
+                var rawMagnitudes = lastPipelineResult.RawIfftSegments[segmentIndex].Select(value => value.Magnitude).ToArray();
+                var referenceMagnitudes = lastPipelineResult.ReferenceIfftSegments[segmentIndex].Select(value => value.Magnitude).ToArray();
+                var overlapStats = CalculateLagOverlapStats(rawMagnitudes, referenceMagnitudes, SelectedCorrelationLag);
+                return string.Format(
+                    CultureInfo.InvariantCulture,
+                    "k = {0} | overlap {1}/{2} | mean abs diff {3:0.0000} | RMS diff {4:0.0000}",
+                    SelectedCorrelationLag,
+                    overlapStats.Item1,
+                    rawMagnitudes.Length,
+                    overlapStats.Item2,
+                    overlapStats.Item3);
+            }
+        }
+
+        public double[] CorrelationOverlayRawSamples
+        {
+            get
+            {
+                if (!HasSelectedSegment())
+                {
+                    return new double[0];
+                }
+
+                return lastPipelineResult.RawIfftSegments[SelectedSegmentIndex].Select(value => value.Magnitude).ToArray();
+            }
+        }
+
+        public double[] CorrelationOverlayReferenceSamples
+        {
+            get
+            {
+                if (!HasSelectedSegment())
+                {
+                    return new double[0];
+                }
+
+                var rawMagnitudes = lastPipelineResult.RawIfftSegments[SelectedSegmentIndex].Select(value => value.Magnitude).ToArray();
+                var referenceMagnitudes = lastPipelineResult.ReferenceIfftSegments[SelectedSegmentIndex].Select(value => value.Magnitude).ToArray();
+                return BuildLagShiftedReferenceOverlay(rawMagnitudes.Length, referenceMagnitudes, SelectedCorrelationLag);
+            }
+        }
+
+        public double CorrelationOverlayXEndValue
+        {
+            get { return Math.Max(0, CorrelationOverlayRawSamples.Length - 1); }
+        }
+
         public string SelectedFinalMetricMode
         {
             get { return selectedFinalMetricMode; }
@@ -352,19 +500,24 @@ namespace OFDR_Signal_Generator.ViewModels
             {
                 if (lastPipelineResult == null || SegmentCount == 0 || SelectedSegmentIndex < 0 || SelectedSegmentIndex >= SegmentCount)
                 {
-                    return "Run the OFDR pipeline to inspect segment-by-segment Raw/Ref, ConjMul, and IFFT results.";
+                    return "Run the OFDR pipeline to inspect segment-by-segment Raw/Ref IFFT and X-Corr results.";
                 }
 
                 var start = lastPipelineResult.SegmentStartIndices[SelectedSegmentIndex];
                 var center = lastPipelineResult.SegmentCenterIndices[SelectedSegmentIndex];
                 var segmentLength = lastPipelineResult.RawSegments[SelectedSegmentIndex].Length;
-                var peak = lastPipelineResult.IfftPeakIndices[SelectedSegmentIndex];
+                var peak = lastPipelineResult.CrossCorrelationPeakIndices[SelectedSegmentIndex];
                 var representative = lastPipelineResult.SegmentRepresentativeValues[SelectedSegmentIndex];
                 var end = start + segmentLength - 1;
 
+                var configuredShiftBins = GetConfiguredShiftBinsForSegment(SelectedSegmentIndex);
+                var shiftSummary = configuredShiftBins == 0
+                    ? "no configured Raw IFFT shift"
+                    : string.Format(CultureInfo.InvariantCulture, "configured Raw IFFT shift {0:+#;-#;0} bin(s)", configuredShiftBins);
+
                 return string.Format(
                     CultureInfo.InvariantCulture,
-                    "Segment {0}/{1} | FFT bins {2}-{3} | center {4} | shifted IFFT peak {5} | {6}: {7:0.0000}",
+                    "Segment {0}/{1} | FFT bins {2}-{3} | center {4} | X-Corr peak {5} | {6}: {7:0.0000} | {8}",
                     SelectedSegmentIndex + 1,
                     SegmentCount,
                     start,
@@ -372,7 +525,8 @@ namespace OFDR_Signal_Generator.ViewModels
                     center,
                     peak,
                     SignalProcessingPipeline.GetFinalMetricYAxisTitle(lastPipelineResult.FinalMetricMode),
-                    representative);
+                    representative,
+                    shiftSummary);
             }
         }
 
@@ -424,6 +578,10 @@ namespace OFDR_Signal_Generator.ViewModels
             RawNoiseLevel = 0.03;
             RawAttenuation = 1.2;
             RawBaselineOffset = 0.06;
+            UseRawSineSignal = false;
+            RawSineFrequency = 4.0;
+            RawSineAmplitude = 1.0;
+            RawSinePhaseDegrees = 0.0;
 
             ReferenceAmplitude = 1.0;
             ReferenceDelaySamples = 14;
@@ -431,6 +589,10 @@ namespace OFDR_Signal_Generator.ViewModels
             ReferenceNoiseLevel = 0.01;
             ReferenceBaselineOffset = 0.02;
             ReferencePhaseShiftDegrees = 12.0;
+            UseReferenceSineSignal = false;
+            ReferenceSineFrequency = 4.0;
+            ReferenceSineAmplitude = 1.0;
+            ReferenceSinePhaseDegrees = 0.0;
 
             FftZeroPadFactor = 2;
             UseHannWindow = true;
@@ -448,9 +610,9 @@ namespace OFDR_Signal_Generator.ViewModels
             PeakThresholdRatio = 0.34;
 
             ReflectionEvents.Clear();
-            ReflectionEvents.Add(new ReflectionEvent { PositionIndex = 96, Amplitude = 0.18, Width = 48.0 });
-            ReflectionEvents.Add(new ReflectionEvent { PositionIndex = 224, Amplitude = 0.24, Width = 64.0 });
-            ReflectionEvents.Add(new ReflectionEvent { PositionIndex = 352, Amplitude = -0.20, Width = 56.0 });
+            ReflectionEvents.Add(new ReflectionEvent { PositionIndex = 2, Amplitude = 6.0, Width = 0.0 });
+            ReflectionEvents.Add(new ReflectionEvent { PositionIndex = 4, Amplitude = -4.0, Width = 0.0 });
+            ReflectionEvents.Add(new ReflectionEvent { PositionIndex = 6, Amplitude = 3.0, Width = 0.0 });
             SelectedReflectionEvent = ReflectionEvents.FirstOrDefault();
 
             loadedRawSignal = null;
@@ -472,17 +634,17 @@ namespace OFDR_Signal_Generator.ViewModels
 
         private void AddReflectionEvent()
         {
-            var nextIndex = ReflectionEvents.Count == 0 ? 96 : ReflectionEvents.Last().PositionIndex + 64;
+            var nextIndex = ReflectionEvents.Count == 0 ? 1 : ReflectionEvents.Last().PositionIndex + 1;
             var reflectionEvent = new ReflectionEvent
             {
                 PositionIndex = nextIndex,
-                Amplitude = 0.15,
-                Width = 48.0
+                Amplitude = 4.0,
+                Width = 0.0
             };
 
             ReflectionEvents.Add(reflectionEvent);
             SelectedReflectionEvent = reflectionEvent;
-            StatusMessage = "Added a new local FFT phase-ramp event for Raw generation.";
+            StatusMessage = "Added a new Raw segment IFFT shift event.";
         }
 
         private void RemoveSelectedEvent()
@@ -494,7 +656,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
             ReflectionEvents.Remove(SelectedReflectionEvent);
             SelectedReflectionEvent = ReflectionEvents.FirstOrDefault();
-            StatusMessage = "Removed the selected local FFT phase-ramp event.";
+            StatusMessage = "Removed the selected Raw segment IFFT shift event.";
         }
 
         private void LoadRawCsv()
@@ -551,6 +713,34 @@ namespace OFDR_Signal_Generator.ViewModels
             StatusMessage = "Loaded reference CSV cleared. Synthetic reference generation will be used again.";
         }
 
+        private void ExportReconstructedRawCsv()
+        {
+            if (currentSignal == null)
+            {
+                GenerateSignal();
+            }
+
+            if (lastPipelineResult == null)
+            {
+                RunPipeline();
+            }
+
+            if (lastPipelineResult == null || lastPipelineResult.ReconstructedRawComplexSignal == null || lastPipelineResult.ReconstructedRawComplexSignal.Length == 0)
+            {
+                StatusMessage = "No reconstructed Raw signal is available yet. Run the pipeline first.";
+                return;
+            }
+
+            var path = PromptForSaveCsv("Save Reconstructed Raw CSV", "synthetic_reconstructed_raw.csv");
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            csvSignalLoader.SaveSignal(path, lastPipelineResult.ReconstructedRawComplexSignal, SampleSpacing);
+            StatusMessage = string.Format(CultureInfo.InvariantCulture, "Reconstructed Raw CSV saved to {0}", path);
+        }
+
         private void GenerateSignal()
         {
             var request = BuildRequest();
@@ -590,7 +780,7 @@ namespace OFDR_Signal_Generator.ViewModels
             ComparisonSummary = null;
             RebuildStageResults("Raw Data");
             StatusMessage = useReferenceAsRawBase
-                ? "Raw data prepared from the loaded reference signal plus configured local FFT phase-ramp events."
+                ? "Raw data prepared from the loaded reference signal. Configured segment shift events are applied later at the Raw Segment IFFT stage."
                 : "Raw and reference data prepared. Loaded CSV data, if present, is now active in the pipeline.";
         }
 
@@ -611,7 +801,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
             UpdateSegmentLabels();
             RebuildStageResults(previousStageName);
-            StatusMessage = string.Format(CultureInfo.InvariantCulture, "OFDR pipeline completed. Final metric profile uses {0}.", lastPipelineResult.FinalMetricMode);
+            StatusMessage = string.Format(CultureInfo.InvariantCulture, "OFDR pipeline completed with segment extraction, post-segmentation zero-padded IFFT, and X-Corr processing. Final metric profile uses {0}.", lastPipelineResult.FinalMetricMode);
         }
 
         private SyntheticSignalRequest BuildRequest()
@@ -624,12 +814,20 @@ namespace OFDR_Signal_Generator.ViewModels
                 RawNoiseLevel = Math.Max(0.0, RawNoiseLevel),
                 RawAttenuation = Math.Max(0.0, RawAttenuation),
                 RawBaselineOffset = RawBaselineOffset,
+                UseRawSineSignal = UseRawSineSignal,
+                RawSineFrequency = RawSineFrequency,
+                RawSineAmplitude = RawSineAmplitude,
+                RawSinePhaseDegrees = RawSinePhaseDegrees,
                 ReferenceAmplitude = ReferenceAmplitude,
                 ReferenceDelaySamples = Math.Max(0, ReferenceDelaySamples),
                 ReferenceWidth = Math.Max(1.0, ReferenceWidth),
                 ReferenceNoiseLevel = Math.Max(0.0, ReferenceNoiseLevel),
                 ReferenceBaselineOffset = ReferenceBaselineOffset,
                 ReferencePhaseShiftDegrees = ReferencePhaseShiftDegrees,
+                UseReferenceSineSignal = UseReferenceSineSignal,
+                ReferenceSineFrequency = ReferenceSineFrequency,
+                ReferenceSineAmplitude = ReferenceSineAmplitude,
+                ReferenceSinePhaseDegrees = ReferenceSinePhaseDegrees,
                 FftZeroPadFactor = Math.Max(1, FftZeroPadFactor),
                 UseHannWindow = UseHannWindow,
                 SegmentSize = Math.Max(2, SegmentSize),
@@ -718,18 +916,18 @@ namespace OFDR_Signal_Generator.ViewModels
                 var rawDescription = loadedRawSignal != null
                     ? "Loaded raw CSV signal before FFT."
                     : loadedReferenceSignal != null
-                        ? "Raw signal derived from the loaded reference CSV plus configured local FFT phase-ramp events."
+                        ? "Raw signal derived from the loaded reference CSV. Segment shift events are applied later at the Raw Segment IFFT stage."
                         : "Generated raw interferometric signal before FFT.";
-                var rawSamples = ToMagnitudes(currentSignal.RawComplexSignal, currentSignal.RawSignal);
-                var referenceSamples = ToMagnitudes(currentSignal.ReferenceComplexSignal, currentSignal.ReferenceSignal);
+                var rawSamples = ToSignalDisplaySamples(currentSignal.RawComplexSignal, currentSignal.RawSignal);
+                var referenceSamples = ToSignalDisplaySamples(currentSignal.ReferenceComplexSignal, currentSignal.ReferenceSignal);
 
                 stages.Add(BuildStage(
                     "Raw Data",
                     rawDescription,
                     rawSamples,
-                    currentSignal.GroundTruthEvents.Select(item => item.PositionIndex).ToArray(),
+                    new int[0],
                     "Sample Index",
-                    "Magnitude",
+                    GetSignalDisplayYAxisTitle(currentSignal.RawComplexSignal),
                     0.0,
                     Math.Max(0, rawSamples.Length - 1)));
 
@@ -739,7 +937,7 @@ namespace OFDR_Signal_Generator.ViewModels
                     referenceSamples,
                     loadedReferenceSignal == null ? new[] { ReferenceDelaySamples } : new int[0],
                     "Sample Index",
-                    "Magnitude",
+                    GetSignalDisplayYAxisTitle(currentSignal.ReferenceComplexSignal),
                     0.0,
                     Math.Max(0, referenceSamples.Length - 1)));
             }
@@ -748,7 +946,7 @@ namespace OFDR_Signal_Generator.ViewModels
             {
                 stages.Add(BuildStage(
                     "Raw FFT",
-                    "Full raw FFT magnitude. Segmentation extracts local windows from this spectrum without flattening bins.",
+                    "Full raw FFT magnitude. Local windows are extracted from this spectrum, then each selected block is zero-padded before IFFT.",
                     lastPipelineResult.RawSpectrumMagnitudes,
                     new int[0],
                     "FFT Bin",
@@ -758,7 +956,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
                 stages.Add(BuildStage(
                     "Ref FFT",
-                    "Full reference FFT magnitude. Segment windows are taken directly from this spectrum.",
+                    "Full reference FFT magnitude. Local windows are taken from this spectrum, then zero-padded before segment IFFT.",
                     lastPipelineResult.ReferenceSpectrumMagnitudes,
                     new int[0],
                     "FFT Bin",
@@ -773,9 +971,17 @@ namespace OFDR_Signal_Generator.ViewModels
                     var center = lastPipelineResult.SegmentCenterIndices[segmentIndex];
                     var segmentLength = lastPipelineResult.RawSegments[segmentIndex].Length;
                     var end = start + segmentLength - 1;
-                    var peakIndex = lastPipelineResult.IfftPeakIndices[segmentIndex];
-                    var zeroLagIndex = lastPipelineResult.IfftSegments[segmentIndex].Length / 2;
-                    var lagEnd = lastPipelineResult.IfftSegments[segmentIndex].Length - zeroLagIndex - 1;
+                    var rawIfftLength = lastPipelineResult.RawIfftSegments[segmentIndex].Length;
+                    var rawIfftZeroLagIndex = rawIfftLength / 2;
+                    var rawIfftLagEnd = rawIfftLength - rawIfftZeroLagIndex - 1;
+                    var referenceIfftLength = lastPipelineResult.ReferenceIfftSegments[segmentIndex].Length;
+                    var referenceIfftZeroLagIndex = referenceIfftLength / 2;
+                    var referenceIfftLagEnd = referenceIfftLength - referenceIfftZeroLagIndex - 1;
+                    var correlationPeakIndex = lastPipelineResult.CrossCorrelationPeakIndices[segmentIndex];
+                    var zeroLagIndex = Math.Max(0, lastPipelineResult.ReferenceIfftSegments[segmentIndex].Length - 1);
+                    var selectedLagMarkerIndex = Math.Max(0, Math.Min(lastPipelineResult.CrossCorrelationSegments[segmentIndex].Length - 1, SelectedCorrelationLag + zeroLagIndex));
+                    var correlationLagStart = -Math.Max(0, lastPipelineResult.ReferenceIfftSegments[segmentIndex].Length - 1);
+                    var correlationLagEnd = Math.Max(0, lastPipelineResult.RawIfftSegments[segmentIndex].Length - 1);
 
                     stages.Add(BuildStage(
                         "Raw Segmentation",
@@ -798,36 +1004,57 @@ namespace OFDR_Signal_Generator.ViewModels
                         end));
 
                     stages.Add(BuildStage(
-                        "ConjMul",
-                        BuildSegmentDescription("Bin-wise Raw segment multiplied by the conjugate of the reference segment.", segmentIndex, start, end, center),
-                        ProjectConjMul(lastPipelineResult.ConjugateMultiplySegments[segmentIndex], SelectedConjMulViewMode),
-                        new int[0],
-                        "FFT Bin",
-                        GetConjMulYAxisTitle(SelectedConjMulViewMode),
-                        start,
-                        end));
-
-                    stages.Add(BuildStage(
-                        "IFFT",
-                        BuildSegmentDescription("Shifted IFFT of the selected ConjMul segment. X-axis is lag-bin space and zero-lag is centered.", segmentIndex, start, end, center),
-                        lastPipelineResult.IfftSegments[segmentIndex].Select(value => value.Magnitude).ToArray(),
-                        new[] { zeroLagIndex, peakIndex },
+                        "Raw Segment IFFT",
+                        BuildRawSegmentIfftDescription(segmentIndex, start, end, center),
+                        lastPipelineResult.RawIfftSegments[segmentIndex].Select(value => value.Magnitude).ToArray(),
+                        BuildRawSegmentIfftMarkers(segmentIndex, rawIfftZeroLagIndex, rawIfftLength),
                         "Lag Bin",
                         "Magnitude",
-                        -zeroLagIndex,
-                        lagEnd));
+                        -rawIfftZeroLagIndex,
+                        rawIfftLagEnd));
+
+                    stages.Add(BuildStage(
+                        "Ref Segment IFFT",
+                        BuildSegmentDescription("IFFT applied after zero-padding the selected reference FFT segment block.", segmentIndex, start, end, center),
+                        lastPipelineResult.ReferenceIfftSegments[segmentIndex].Select(value => value.Magnitude).ToArray(),
+                        new[] { referenceIfftZeroLagIndex },
+                        "Lag Bin",
+                        "Magnitude",
+                        -referenceIfftZeroLagIndex,
+                        referenceIfftLagEnd));
+
+                    stages.Add(BuildStage(
+                        "X-Corr",
+                        BuildSegmentDescription("Cross-correlation between the raw-segment IFFT and reference-segment IFFT. Zero-lag is centered.", segmentIndex, start, end, center),
+                        ProjectComplexView(lastPipelineResult.CrossCorrelationSegments[segmentIndex], SelectedConjMulViewMode),
+                        new[] { zeroLagIndex, correlationPeakIndex, selectedLagMarkerIndex },
+                        "Lag Bin",
+                        GetComplexViewYAxisTitle(SelectedConjMulViewMode),
+                        correlationLagStart,
+                        correlationLagEnd));
                 }
 
                 stages.Add(BuildStage(
                     "Final Metric Profile",
-                    string.Format(CultureInfo.InvariantCulture, "Segment-wise IFFT feature profile built from {0}. Values are mapped across segment-center positions on the FFT-bin axis.", lastPipelineResult.FinalMetricMode),
+                    string.Format(CultureInfo.InvariantCulture, "Segment-wise X-Corr feature profile built from {0}. Values are mapped across segment-center positions on the FFT-bin axis.", lastPipelineResult.FinalMetricMode),
                     lastPipelineResult.FinalProfile,
-                    lastPipelineResult.DetectedEvents.Select(item => item.PositionIndex).ToArray(),
+                    BuildFinalMetricProfileMarkers(),
                     "FFT Bin / Segment Position",
                     SignalProcessingPipeline.GetFinalMetricYAxisTitle(lastPipelineResult.FinalMetricMode),
                     0.0,
                     Math.Max(0, lastPipelineResult.FinalProfile.Length - 1),
                     lastPipelineResult.DetectedEvents));
+
+                var reconstructedSamples = ToSignalDisplaySamples(lastPipelineResult.ReconstructedRawComplexSignal, lastPipelineResult.ReconstructedRawSignal);
+                stages.Add(BuildStage(
+                    "Reconstructed Raw",
+                    "Raw signal reconstructed from the shifted Raw Segment IFFT blocks by FFT-ing each block back to spectrum space, overlap-averaging the segments, and applying the inverse full FFT.",
+                    reconstructedSamples,
+                    new int[0],
+                    "Sample Index",
+                    GetSignalDisplayYAxisTitle(lastPipelineResult.ReconstructedRawComplexSignal),
+                    0.0,
+                    Math.Max(0, reconstructedSamples.Length - 1)));
             }
 
             ReplaceItems(StageResults, stages);
@@ -836,6 +1063,112 @@ namespace OFDR_Signal_Generator.ViewModels
                 ? StageResults.FirstOrDefault()
                 : StageResults.FirstOrDefault(item => string.Equals(item.Name, targetStageName, StringComparison.Ordinal)) ?? StageResults.FirstOrDefault();
         }
+        private void SyncSelectedCorrelationLag(bool preferPeak)
+        {
+            var bounds = GetSelectedCorrelationLagBounds();
+            var desired = preferPeak ? GetSelectedCorrelationPeakLag() : Math.Max(bounds.Item1, Math.Min(bounds.Item2, selectedCorrelationLag));
+            if (selectedCorrelationLag != desired)
+            {
+                selectedCorrelationLag = desired;
+                OnPropertyChanged(nameof(SelectedCorrelationLag));
+            }
+
+            NotifyCorrelationInspectorChanged();
+        }
+
+        private void NotifyCorrelationInspectorChanged()
+        {
+            OnPropertyChanged(nameof(IsCorrelationInspectorVisible));
+            OnPropertyChanged(nameof(SelectedCorrelationLagMinimum));
+            OnPropertyChanged(nameof(SelectedCorrelationLagMaximum));
+            OnPropertyChanged(nameof(SelectedCorrelationLagSummary));
+            OnPropertyChanged(nameof(CorrelationOverlayRawSamples));
+            OnPropertyChanged(nameof(CorrelationOverlayReferenceSamples));
+            OnPropertyChanged(nameof(CorrelationOverlayXEndValue));
+        }
+
+        private Tuple<int, int> GetSelectedCorrelationLagBounds()
+        {
+            if (!HasSelectedSegment())
+            {
+                return Tuple.Create(0, 0);
+            }
+
+            var rawLength = lastPipelineResult.RawIfftSegments[SelectedSegmentIndex].Length;
+            var referenceLength = lastPipelineResult.ReferenceIfftSegments[SelectedSegmentIndex].Length;
+            return Tuple.Create(-Math.Max(0, referenceLength - 1), Math.Max(0, rawLength - 1));
+        }
+
+        private int GetSelectedCorrelationPeakLag()
+        {
+            if (!HasSelectedSegment())
+            {
+                return 0;
+            }
+
+            var zeroLagIndex = Math.Max(0, lastPipelineResult.ReferenceIfftSegments[SelectedSegmentIndex].Length - 1);
+            return lastPipelineResult.CrossCorrelationPeakIndices[SelectedSegmentIndex] - zeroLagIndex;
+        }
+
+        private static double[] BuildLagShiftedReferenceOverlay(int targetLength, double[] referenceSamples, int lag)
+        {
+            targetLength = Math.Max(0, targetLength);
+            referenceSamples = referenceSamples ?? new double[0];
+            var shifted = new double[targetLength];
+            for (var displayIndex = 0; displayIndex < targetLength; displayIndex++)
+            {
+                var sourceIndex = displayIndex - lag;
+                shifted[displayIndex] = sourceIndex >= 0 && sourceIndex < referenceSamples.Length ? referenceSamples[sourceIndex] : 0.0;
+            }
+
+            return shifted;
+        }
+
+        private static Tuple<int, double, double> CalculateLagOverlapStats(double[] rawSamples, double[] referenceSamples, int lag)
+        {
+            rawSamples = rawSamples ?? new double[0];
+            referenceSamples = referenceSamples ?? new double[0];
+            var overlapCount = 0;
+            double absSum = 0.0;
+            double squaredSum = 0.0;
+
+            for (var rawIndex = 0; rawIndex < rawSamples.Length; rawIndex++)
+            {
+                var referenceIndex = rawIndex - lag;
+                if (referenceIndex < 0 || referenceIndex >= referenceSamples.Length)
+                {
+                    continue;
+                }
+
+                var diff = rawSamples[rawIndex] - referenceSamples[referenceIndex];
+                absSum += Math.Abs(diff);
+                squaredSum += diff * diff;
+                overlapCount++;
+            }
+
+            if (overlapCount == 0)
+            {
+                return Tuple.Create(0, 0.0, 0.0);
+            }
+
+            return Tuple.Create(overlapCount, absSum / overlapCount, Math.Sqrt(squaredSum / overlapCount));
+        }
+
+        private static string PromptForSaveCsv(string title, string defaultFileName)
+        {
+            var dialog = new SaveFileDialog
+            {
+                Title = title,
+                Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+                FileName = defaultFileName,
+                AddExtension = true,
+                DefaultExt = ".csv",
+                OverwritePrompt = true
+            };
+
+            return dialog.ShowDialog() == true ? dialog.FileName : null;
+        }
+
         private bool HasSelectedSegment()
         {
             return lastPipelineResult != null &&
@@ -869,17 +1202,31 @@ namespace OFDR_Signal_Generator.ViewModels
                 center);
         }
 
-        private static double[] ToMagnitudes(System.Numerics.Complex[] complexSamples, double[] realSamples)
+        private static double[] ToSignalDisplaySamples(System.Numerics.Complex[] complexSamples, double[] realSamples)
         {
             if (complexSamples != null && complexSamples.Length > 0)
             {
-                return complexSamples.Select(value => value.Magnitude).ToArray();
+                var hasImaginaryContent = complexSamples.Any(value => Math.Abs(value.Imaginary) > 1e-9);
+                return hasImaginaryContent
+                    ? complexSamples.Select(value => value.Magnitude).ToArray()
+                    : complexSamples.Select(value => value.Real).ToArray();
             }
 
             return realSamples ?? new double[0];
         }
 
-        private static double[] ProjectConjMul(System.Numerics.Complex[] samples, string mode)
+        private static string GetSignalDisplayYAxisTitle(System.Numerics.Complex[] complexSamples)
+        {
+            if (complexSamples != null && complexSamples.Length > 0)
+            {
+                var hasImaginaryContent = complexSamples.Any(value => Math.Abs(value.Imaginary) > 1e-9);
+                return hasImaginaryContent ? "Magnitude" : "Signal";
+            }
+
+            return "Signal";
+        }
+
+        private static double[] ProjectComplexView(System.Numerics.Complex[] samples, string mode)
         {
             samples = samples ?? new System.Numerics.Complex[0];
             switch (mode)
@@ -895,7 +1242,7 @@ namespace OFDR_Signal_Generator.ViewModels
             }
         }
 
-        private static string GetConjMulYAxisTitle(string mode)
+        private static string GetComplexViewYAxisTitle(string mode)
         {
             switch (mode)
             {
@@ -908,6 +1255,81 @@ namespace OFDR_Signal_Generator.ViewModels
                 default:
                     return "Magnitude";
             }
+        }
+
+        private string BuildRawSegmentIfftDescription(int segmentIndex, int start, int end, int center)
+        {
+            var description = BuildSegmentDescription("IFFT applied after zero-padding the selected raw FFT segment block.", segmentIndex, start, end, center);
+            var shiftBins = GetConfiguredShiftBinsForSegment(segmentIndex);
+            return shiftBins == 0
+                ? description
+                : string.Format(CultureInfo.InvariantCulture, "{0} A circular shift of {1:+#;-#;0} bin(s) is then applied directly to this Raw Segment IFFT.", description, shiftBins);
+        }
+        private int[] BuildRawSegmentIfftMarkers(int segmentIndex, int zeroLagIndex, int sampleLength)
+        {
+            if (sampleLength <= 0)
+            {
+                return new int[0];
+            }
+            var markers = new List<int>
+            {
+                Math.Max(0, Math.Min(sampleLength - 1, zeroLagIndex))
+            };
+            var shiftBins = GetConfiguredShiftBinsForSegment(segmentIndex);
+            if (shiftBins != 0)
+            {
+                markers.Add(WrapIndex(zeroLagIndex + shiftBins, sampleLength));
+            }
+            return markers.Distinct().OrderBy(index => index).ToArray();
+        }
+        private int[] BuildFinalMetricProfileMarkers()
+        {
+            var markers = new List<int>();
+            markers.AddRange(GetConfiguredSegmentCenterMarkers());
+            if (lastPipelineResult != null && lastPipelineResult.DetectedEvents != null)
+            {
+                markers.AddRange(lastPipelineResult.DetectedEvents.Select(item => item.PositionIndex));
+            }
+            return markers.Distinct().OrderBy(index => index).ToArray();
+        }
+        private int[] GetConfiguredSegmentCenterMarkers()
+        {
+            if (lastPipelineResult == null || lastPipelineResult.SegmentCenterIndices == null)
+            {
+                return new int[0];
+            }
+            return ReflectionEvents
+                .Where(item => item != null)
+                .Select(item => item.PositionIndex - 1)
+                .Where(index => index >= 0 && index < lastPipelineResult.SegmentCenterIndices.Count)
+                .Select(index => lastPipelineResult.SegmentCenterIndices[index])
+                .Distinct()
+                .OrderBy(index => index)
+                .ToArray();
+        }
+        private int GetConfiguredShiftBinsForSegment(int segmentIndex)
+        {
+            if (segmentIndex < 0)
+            {
+                return 0;
+            }
+            return ReflectionEvents
+                .Where(item => item != null && item.PositionIndex == segmentIndex + 1)
+                .Select(item => (int)Math.Round(item.Amplitude))
+                .Sum();
+        }
+        private static int WrapIndex(int index, int sampleLength)
+        {
+            if (sampleLength <= 0)
+            {
+                return 0;
+            }
+            var wrapped = index % sampleLength;
+            if (wrapped < 0)
+            {
+                wrapped += sampleLength;
+            }
+            return wrapped;
         }
 
         private static StageResult BuildStage(string name, string description, double[] samples, int[] markers, string xAxisTitle, string yAxisTitle, double xStartValue, double xEndValue, IList<DetectedEvent> detectedEvents = null)
@@ -944,6 +1366,28 @@ namespace OFDR_Signal_Generator.ViewModels
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

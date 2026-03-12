@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -13,9 +13,29 @@ namespace OFDR_Signal_Generator.Services
             var sampleCount = Math.Max(1, request.SampleCount);
             var events = GetValidEvents(request, sampleCount);
             var refRandom = new Random(request.RandomSeed + 97);
-            var referenceSignal = BuildReferenceSignal(sampleCount, request, refRandom);
+            var referenceSignal = request.UseReferenceSineSignal
+                ? BuildSineSignal(sampleCount, request.ReferenceSineAmplitude, request.ReferenceSineFrequency, request.ReferenceSinePhaseDegrees, request.ReferenceBaselineOffset, request.ReferenceNoiseLevel, refRandom)
+                : BuildReferenceSignal(sampleCount, request, refRandom);
             var referenceComplex = referenceSignal.Select(value => new Complex(value, 0.0)).ToArray();
-            var rawComplex = ApplyEventsToBaseComplexSignal(referenceComplex, request);
+
+            Complex[] rawComplex;
+            if (request.UseRawSineSignal)
+            {
+                if (ShouldMirrorReferenceSine(request))
+                {
+                    rawComplex = referenceComplex.ToArray();
+                }
+                else
+                {
+                    var rawRandom = new Random(request.RandomSeed + 11);
+                    var rawSignal = BuildSineSignal(sampleCount, request.RawSineAmplitude, request.RawSineFrequency, request.RawSinePhaseDegrees, request.RawBaselineOffset, 0.0, rawRandom);
+                    rawComplex = rawSignal.Select(value => new Complex(value, 0.0)).ToArray();
+                }
+            }
+            else
+            {
+                rawComplex = ApplyEventsToBaseComplexSignal(referenceComplex, request, applyNoise: true);
+            }
 
             return new SyntheticSignalResult
             {
@@ -37,22 +57,23 @@ namespace OFDR_Signal_Generator.Services
 
         public Complex[] ApplyEventsToBaseComplexSignal(Complex[] baseSignal, SyntheticSignalRequest request)
         {
+            return ApplyEventsToBaseComplexSignal(baseSignal, request, applyNoise: true);
+        }
+
+        private static Complex[] ApplyEventsToBaseComplexSignal(Complex[] baseSignal, SyntheticSignalRequest request, bool applyNoise)
+        {
             var source = baseSignal == null ? new Complex[Math.Max(1, request.SampleCount)] : baseSignal.ToArray();
-            var events = GetValidEvents(request, source.Length);
             if (source.Length == 0)
             {
                 return source;
             }
 
             var output = source.ToArray();
-            if (events.Count > 0)
+            if (applyNoise)
             {
-                var spectrum = ForwardTransform(output);
-                ApplyEventsToSpectrum(spectrum, events);
-                output = InverseTransform(spectrum);
+                ApplyNoiseToComplexSignal(output, request.RawNoiseLevel, new Random(request.RandomSeed + 11));
             }
 
-            ApplyNoiseToComplexSignal(output, request.RawNoiseLevel, new Random(request.RandomSeed + 11));
             return output;
         }
 
@@ -62,6 +83,15 @@ namespace OFDR_Signal_Generator.Services
                 .Select(item => item.Clone())
                 .Where(item => item.PositionIndex >= 0 && item.PositionIndex < sampleCount)
                 .ToList();
+        }
+
+        private static bool ShouldMirrorReferenceSine(SyntheticSignalRequest request)
+        {
+            return request.UseReferenceSineSignal
+                && Math.Abs(request.RawSineAmplitude - request.ReferenceSineAmplitude) < 1e-9
+                && Math.Abs(request.RawSineFrequency - request.ReferenceSineFrequency) < 1e-9
+                && Math.Abs(request.RawSinePhaseDegrees - request.ReferenceSinePhaseDegrees) < 1e-9
+                && Math.Abs(request.RawBaselineOffset - request.ReferenceBaselineOffset) < 1e-9;
         }
 
         private static double[] BuildReferenceSignal(int sampleCount, SyntheticSignalRequest request, Random random)
@@ -79,6 +109,21 @@ namespace OFDR_Signal_Generator.Services
                 var phaseEnvelope = Math.Cos(phaseShift + (normalizedDistance * 0.2));
                 signal[index] += pulse * phaseEnvelope;
                 signal[index] += NextGaussian(random) * Math.Max(0.0, request.ReferenceNoiseLevel);
+            }
+
+            return signal;
+        }
+
+        private static double[] BuildSineSignal(int sampleCount, double amplitude, double frequencyCyclesPerWindow, double phaseDegrees, double baseline, double noiseLevel, Random random)
+        {
+            var signal = new double[sampleCount];
+            var phase = phaseDegrees * Math.PI / 180.0;
+            for (var index = 0; index < sampleCount; index++)
+            {
+                var normalizedPosition = index / (double)Math.Max(1, sampleCount - 1);
+                var sine = amplitude * Math.Sin((2.0 * Math.PI * frequencyCyclesPerWindow * normalizedPosition) + phase);
+                signal[index] = baseline + sine;
+                signal[index] += NextGaussian(random) * Math.Max(0.0, noiseLevel);
             }
 
             return signal;
@@ -172,3 +217,6 @@ namespace OFDR_Signal_Generator.Services
         }
     }
 }
+
+
+

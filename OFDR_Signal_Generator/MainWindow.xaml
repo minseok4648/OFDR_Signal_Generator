@@ -1,4 +1,4 @@
-﻿<Window x:Class="OFDR_Signal_Generator.MainWindow"
+<Window x:Class="OFDR_Signal_Generator.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -12,6 +12,7 @@
         MinWidth="1340"
         Background="#FFF8FAFC">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <Style TargetType="GroupBox">
             <Setter Property="Margin" Value="0,0,0,14" />
             <Setter Property="Padding" Value="10" />
@@ -52,10 +53,16 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
+        <Grid Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
                 <TextBlock FontSize="28" FontWeight="Bold" Foreground="#FF0F172A" Text="OFDR Signal Process Lab" />
-                <TextBlock Margin="0,8,0,18" Foreground="#FF475569" Text="Configure synthetic settings or load CSV-formatted Raw/Ref beat signals, then inspect each OFDR stage. Synthetic events now modify Raw through local FFT phase-ramp windows rather than direct time-domain pulses." TextWrapping="Wrap" />
+                <TextBlock Margin="0,8,0,18" Foreground="#FF475569" Text="Configure synthetic settings or load CSV-formatted Raw/Ref beat signals, then inspect each OFDR stage. Sine test mode generates signed Raw/Ref sine signals directly from the configured amplitude, frequency, and phase values." TextWrapping="Wrap" />
 
                 <GroupBox Header="CSV Load">
                     <StackPanel>
@@ -163,6 +170,51 @@
                     </Grid>
                 </GroupBox>
 
+                <GroupBox Header="Sine Test Signal Settings">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <CheckBox Grid.Row="0" Grid.Column="0" IsChecked="{Binding UseRawSineSignal}" Content="Use Raw Sine" Margin="0,0,10,8" />
+                        <CheckBox Grid.Row="0" Grid.Column="1" IsChecked="{Binding UseReferenceSineSignal}" Content="Use Ref Sine" Margin="0,0,0,8" />
+
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,8">
+                            <TextBlock Style="{StaticResource LabelText}" Text="Raw Sine Amplitude" />
+                            <TextBox Text="{Binding RawSineAmplitude, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                            <TextBlock Style="{StaticResource LabelText}" Text="Ref Sine Amplitude" />
+                            <TextBox Text="{Binding ReferenceSineAmplitude, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,10,8">
+                            <TextBlock Style="{StaticResource LabelText}" Text="Raw Sine Frequency (cycles/window)" />
+                            <TextBox Text="{Binding RawSineFrequency, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
+                            <TextBlock Style="{StaticResource LabelText}" Text="Ref Sine Frequency (cycles/window)" />
+                            <TextBox Text="{Binding ReferenceSineFrequency, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,10,0">
+                            <TextBlock Style="{StaticResource LabelText}" Text="Raw Sine Phase (deg)" />
+                            <TextBox Text="{Binding RawSinePhaseDegrees, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="3" Grid.Column="1">
+                            <TextBlock Style="{StaticResource LabelText}" Text="Ref Sine Phase (deg)" />
+                            <TextBox Text="{Binding ReferenceSinePhaseDegrees, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}" />
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+
                 <GroupBox Header="FFT Settings">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -170,7 +222,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Margin="0,0,10,0">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Zero Pad Factor" />
+                            <TextBlock Style="{StaticResource LabelText}" Text="Segment IFFT Zero Pad Factor" />
                             <TextBox Text="{Binding FftZeroPadFactor, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                         <StackPanel Grid.Column="1">
@@ -197,23 +249,22 @@
                     </Grid>
                 </GroupBox>
 
-                <GroupBox Header="ConjMul Settings">
+                <GroupBox Header="X-Corr Settings">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Margin="0,0,10,0">
-                            <TextBlock Style="{StaticResource LabelText}" Text="ConjMul Scale" />
+                            <TextBlock Style="{StaticResource LabelText}" Text="X-Corr Scale" />
                             <TextBox Text="{Binding ConjugateMultiplyScale, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
                         </StackPanel>
                         <StackPanel Grid.Column="1">
                             <TextBlock Style="{StaticResource LabelText}" Text="Normalization" />
-                            <CheckBox IsChecked="{Binding NormalizeConjugateMultiply}" Content="Normalize by magnitude" />
+                            <CheckBox IsChecked="{Binding NormalizeConjugateMultiply}" Content="Normalize X-Corr" />
                         </StackPanel>
                     </Grid>
                 </GroupBox>
-
                 <GroupBox Header="Final Metric Settings">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -239,7 +290,7 @@
                     </Grid>
                 </GroupBox>
 
-                <GroupBox Header="Synthetic OFDR Local Phase-Ramp Events">
+                <GroupBox Header="Synthetic Raw Segment IFFT Shift Events">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
                             <Button Command="{Binding AddEventCommand}" Content="Add Event" />
@@ -247,61 +298,27 @@
                         </StackPanel>
                         <DataGrid ItemsSource="{Binding ReflectionEvents}" SelectedItem="{Binding SelectedReflectionEvent}" MinHeight="220">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Center FFT Bin" Binding="{Binding PositionIndex, UpdateSourceTrigger=PropertyChanged}" Width="*" />
-                                <DataGridTextColumn Header="Phase Slope" Binding="{Binding Amplitude, UpdateSourceTrigger=PropertyChanged, StringFormat=F3}" Width="*" />
-                                <DataGridTextColumn Header="Window Width" Binding="{Binding Width, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}" Width="*" />
+                                <DataGridTextColumn Header="Target Segment" Binding="{Binding PositionIndex, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                                <DataGridTextColumn Header="Shift Bins" Binding="{Binding Amplitude, UpdateSourceTrigger=PropertyChanged, StringFormat=F0}" Width="*" />
+                                <DataGridTextColumn Header="Reserved" Binding="{Binding Width, UpdateSourceTrigger=PropertyChanged, StringFormat=F0}" Width="*" Visibility="Collapsed" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
                 </GroupBox>
-
-                <GroupBox Header="Actions">
-                    <StackPanel>
-                        <Button Command="{Binding GenerateSignalCommand}" Content="Prepare Active Raw + Ref Data" />
-                        <Button Command="{Binding RunPipelineCommand}" Background="#FF1D4ED8" BorderBrush="#FF1D4ED8" Content="Run OFDR Pipeline" />
-                        <Button Command="{Binding ResetDefaultsCommand}" Background="#FF475569" BorderBrush="#FF475569" Content="Reset Defaults" />
-                    </StackPanel>
-                </GroupBox>
-            </StackPanel>
-        </ScrollViewer>
-
-        <Grid Grid.Column="2">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <Border Padding="16" Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="14">
-                <StackPanel>
-                    <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="#FF0F172A" Text="Pipeline Overview" />
-                    <TextBlock Margin="0,6,0,0" Foreground="#FF475569" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
                 </StackPanel>
-            </Border>
+            </ScrollViewer>
 
-            <Grid Grid.Row="1" Margin="0,14,0,14">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" Background="#FFECFDF5" BorderBrush="#FFA7F3D0" BorderThickness="1" CornerRadius="12">
-                    <StackPanel>
-                        <TextBlock FontSize="13" Foreground="#FF065F46" Text="Detection Summary" />
-                        <TextBlock Margin="0,8,0,0" FontSize="18" FontWeight="SemiBold" Foreground="#FF064E3B" Text="{Binding ComparisonSummaryText}" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Border>
-
-                <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" Background="#FFFFFBEB" BorderBrush="#FFFDE68A" BorderThickness="1" CornerRadius="12">
-                    <StackPanel>
-                        <TextBlock FontSize="13" Foreground="#FF92400E" Text="Stage / Segment Coverage" />
-                        <TextBlock Margin="0,8,0,0" FontSize="18" FontWeight="SemiBold" Foreground="#FF78350F" Text="{Binding StageResults.Count, StringFormat={}{0} stages available}" />
-                        <TextBlock Margin="0,6,0,0" Foreground="#FF92400E" Text="{Binding SegmentCount, StringFormat={}{0} segment windows ready}" />
-                    </StackPanel>
-                </Border>
-            </Grid>
-
-            <TabControl Grid.Row="2" Background="Transparent">
+            <GroupBox Grid.Row="1" Header="Actions" Margin="0,14,0,0">
+                <StackPanel>
+                    <Button Command="{Binding GenerateSignalCommand}" Content="Prepare Active Raw + Ref Data" />
+                    <Button Command="{Binding RunPipelineCommand}" Background="#FF1D4ED8" BorderBrush="#FF1D4ED8" Content="Run OFDR Pipeline" />
+                    <Button Command="{Binding ExportReconstructedRawCsvCommand}" Background="#FF7C3AED" BorderBrush="#FF7C3AED" Content="Export Reconstructed Raw CSV" />
+                    <Button Command="{Binding ResetDefaultsCommand}" Background="#FF475569" BorderBrush="#FF475569" Content="Reset Defaults" />
+                </StackPanel>
+            </GroupBox>
+        </Grid>
+        <Grid Grid.Column="2">
+            <TabControl Background="Transparent">
                 <TabItem Header="Stages">
                     <Border Padding="12" Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="14">
                         <Grid>
@@ -323,7 +340,7 @@
                                     <StackPanel Grid.Column="1" Width="320">
                                         <TextBlock Style="{StaticResource LabelText}" Text="Selected Segment" />
                                         <ComboBox ItemsSource="{Binding SegmentLabels}" SelectedIndex="{Binding SelectedSegmentIndex}" MinWidth="300" Margin="0,0,0,8" />
-                                        <TextBlock Style="{StaticResource LabelText}" Text="ConjMul View" />
+                                        <TextBlock Style="{StaticResource LabelText}" Text="X-Corr View" />
                                         <ComboBox ItemsSource="{Binding ConjMulViewModes}" SelectedItem="{Binding SelectedConjMulViewMode}" MinWidth="300" />
                                     </StackPanel>
                                 </Grid>
@@ -342,6 +359,8 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="*" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
                                             <TextBlock Text="{Binding Description}" Foreground="#FF475569" TextWrapping="Wrap" />
                                             <ItemsControl Grid.Row="1" Margin="0,12,0,12" ItemsSource="{Binding Metrics}">
@@ -361,7 +380,54 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
-                                            <controls:SignalPlot Grid.Row="2" Values="{Binding Samples}" MarkerIndices="{Binding MarkerIndices}" XAxisTitle="{Binding XAxisTitle}" YAxisTitle="{Binding YAxisTitle}" XStartValue="{Binding XStartValue}" XEndValue="{Binding XEndValue}" />
+                                            <controls:SignalPlot Grid.Row="2" MinHeight="320" Values="{Binding Samples}" MarkerIndices="{Binding MarkerIndices}" XAxisTitle="{Binding XAxisTitle}" YAxisTitle="{Binding YAxisTitle}" XStartValue="{Binding XStartValue}" XEndValue="{Binding XEndValue}" />
+                                            <Border Grid.Row="3"
+                                                    Margin="0,12,0,0"
+                                                    Padding="12"
+                                                    Background="#FFF8FAFC"
+                                                    BorderBrush="#FFE2E8F0"
+                                                    BorderThickness="1"
+                                                    CornerRadius="12"
+                                                    Visibility="{Binding DataContext.IsCorrelationInspectorVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="#FF0F172A" Text="Lag Overlap Inspector" />
+                                                    <TextBlock Margin="0,6,0,10" Foreground="#FF475569" Text="{Binding DataContext.SelectedCorrelationLagSummary, RelativeSource={RelativeSource AncestorType=Window}}" TextWrapping="Wrap" />
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FF334155" Text="k (Lag)" />
+                                                        <Slider Grid.Column="1"
+                                                                Minimum="{Binding DataContext.SelectedCorrelationLagMinimum, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                Maximum="{Binding DataContext.SelectedCorrelationLagMaximum, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                Value="{Binding DataContext.SelectedCorrelationLag, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                IsSnapToTickEnabled="True"
+                                                                TickFrequency="1" />
+                                                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="#FF0F172A" FontWeight="SemiBold" Text="{Binding DataContext.SelectedCorrelationLag, RelativeSource={RelativeSource AncestorType=Window}, StringFormat='k = {0}'}" />
+                                                    </Grid>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                                                            <Rectangle Width="12" Height="12" Fill="#FF38BDF8" Margin="0,0,6,0" />
+                                                            <TextBlock Foreground="#FF334155" Text="Raw Segment IFFT" />
+                                                        </StackPanel>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Rectangle Width="12" Height="12" Fill="#FFFB923C" Margin="0,0,6,0" />
+                                                            <TextBlock Foreground="#FF334155" Text="Shifted Ref Segment IFFT" />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            <controls:SignalPlot Grid.Row="4" MinHeight="240"
+                                                                 Margin="0,12,0,0"
+                                                                 Visibility="{Binding DataContext.IsCorrelationInspectorVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                 Values="{Binding DataContext.CorrelationOverlayRawSamples, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                 SecondaryValues="{Binding DataContext.CorrelationOverlayReferenceSamples, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                 XAxisTitle="IFFT Sample Index"
+                                                                 YAxisTitle="Magnitude"
+                                                                 XStartValue="0"
+                                                                 XEndValue="{Binding DataContext.CorrelationOverlayXEndValue, RelativeSource={RelativeSource AncestorType=Window}}" />
                                         </Grid>
                                     </DataTemplate>
                                 </TabControl.ContentTemplate>
@@ -390,9 +456,9 @@
                             <GroupBox Grid.Column="0" Header="Ground Truth Events" Margin="0,0,8,0">
                                 <DataGrid ItemsSource="{Binding ReflectionEvents}">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Center FFT Bin" Binding="{Binding PositionIndex}" Width="*" />
-                                        <DataGridTextColumn Header="Phase Slope" Binding="{Binding Amplitude, StringFormat=F3}" Width="*" />
-                                        <DataGridTextColumn Header="Window Width" Binding="{Binding Width, StringFormat=F2}" Width="*" />
+                                        <DataGridTextColumn Header="Target Segment" Binding="{Binding PositionIndex}" Width="*" />
+                                        <DataGridTextColumn Header="Shift Bins" Binding="{Binding Amplitude, StringFormat=F0}" Width="*" />
+                                        <DataGridTextColumn Header="Reserved" Binding="{Binding Width, StringFormat=F0}" Width="*" Visibility="Collapsed" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </GroupBox>
@@ -424,6 +490,16 @@
         </Grid>
     </Grid>
 </Window>
+
+
+
+
+
+
+
+
+
+
 
 
 
