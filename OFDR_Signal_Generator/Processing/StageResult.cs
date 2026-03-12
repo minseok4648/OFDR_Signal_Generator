@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using OFDR_Signal_Generator.Models;
 
 namespace OFDR_Signal_Generator.Processing
@@ -16,5 +16,13 @@ namespace OFDR_Signal_Generator.Processing
         public IList<StageMetric> Metrics { get; set; }
 
         public IList<DetectedEvent> DetectedEvents { get; set; }
+
+        public string XAxisTitle { get; set; }
+
+        public string YAxisTitle { get; set; }
+
+        public double XStartValue { get; set; }
+
+        public double XEndValue { get; set; }
     }
 }

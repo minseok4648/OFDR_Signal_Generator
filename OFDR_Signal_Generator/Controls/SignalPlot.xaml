@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="OFDR_Signal_Generator.Controls.SignalPlot"
+<UserControl x:Class="OFDR_Signal_Generator.Controls.SignalPlot"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              MinHeight="220"
@@ -9,7 +9,25 @@
             CornerRadius="10"
             Padding="4">
         <Grid>
-            <Canvas x:Name="PlotCanvas" ClipToBounds="True" />
+            <Canvas x:Name="PlotCanvas"
+                    ClipToBounds="True"
+                    Background="Transparent"
+                    MouseMove="PlotCanvas_OnMouseMove"
+                    MouseLeave="PlotCanvas_OnMouseLeave" />
+            <Border x:Name="HoverPopup"
+                    Visibility="Collapsed"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Background="#E6000000"
+                    BorderBrush="#FF7DD3FC"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="8,4"
+                    IsHitTestVisible="False">
+                <TextBlock x:Name="HoverText"
+                           Foreground="White"
+                           FontSize="12" />
+            </Border>
             <TextBlock x:Name="EmptyStateText"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"

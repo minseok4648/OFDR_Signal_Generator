@@ -1,4 +1,4 @@
-<Window x:Class="OFDR_Signal_Generator.MainWindow"
+﻿<Window x:Class="OFDR_Signal_Generator.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -55,7 +55,7 @@
         <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <TextBlock FontSize="28" FontWeight="Bold" Foreground="#FF0F172A" Text="OFDR Signal Process Lab" />
-                <TextBlock Margin="0,8,0,18" Foreground="#FF475569" Text="Configure synthetic settings or load CSV-formatted Raw/Ref beat signals, then inspect every OFDR processing stage." TextWrapping="Wrap" />
+                <TextBlock Margin="0,8,0,18" Foreground="#FF475569" Text="Configure synthetic settings or load CSV-formatted Raw/Ref beat signals, then inspect each OFDR stage. Synthetic events now modify Raw through local FFT phase-ramp windows rather than direct time-domain pulses." TextWrapping="Wrap" />
 
                 <GroupBox Header="CSV Load">
                     <StackPanel>
@@ -106,15 +106,19 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,10,8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,8">
                             <TextBlock Style="{StaticResource LabelText}" Text="Raw Noise" />
                             <TextBox Text="{Binding RawNoiseLevel, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Margin="0,0,0,8">
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,8">
                             <TextBlock Style="{StaticResource LabelText}" Text="Raw Attenuation" />
                             <TextBox Text="{Binding RawAttenuation, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
                         </StackPanel>
-                        <StackPanel Grid.ColumnSpan="2">
+                        <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
                             <TextBlock Style="{StaticResource LabelText}" Text="Raw Baseline Offset" />
                             <TextBox Text="{Binding RawBaselineOffset, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
                         </StackPanel>
@@ -210,24 +214,32 @@
                     </Grid>
                 </GroupBox>
 
-                <GroupBox Header="Final Result Settings">
+                <GroupBox Header="Final Metric Settings">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,10,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,8">
+                            <TextBlock Style="{StaticResource LabelText}" Text="IFFT Feature Metric" />
+                            <ComboBox ItemsSource="{Binding FinalMetricModes}" SelectedItem="{Binding SelectedFinalMetricMode}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0">
                             <TextBlock Style="{StaticResource LabelText}" Text="Smoothing Window" />
                             <TextBox Text="{Binding FinalSmoothingWindow, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
-                        <StackPanel Grid.Column="1">
+                        <StackPanel Grid.Row="1" Grid.Column="1">
                             <TextBlock Style="{StaticResource LabelText}" Text="Peak Threshold Ratio" />
                             <TextBox Text="{Binding PeakThresholdRatio, UpdateSourceTrigger=PropertyChanged, StringFormat=F3}" />
                         </StackPanel>
                     </Grid>
                 </GroupBox>
 
-                <GroupBox Header="Synthetic Raw Reflection Events">
+                <GroupBox Header="Synthetic OFDR Local Phase-Ramp Events">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
                             <Button Command="{Binding AddEventCommand}" Content="Add Event" />
@@ -235,9 +247,9 @@
                         </StackPanel>
                         <DataGrid ItemsSource="{Binding ReflectionEvents}" SelectedItem="{Binding SelectedReflectionEvent}" MinHeight="220">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Index" Binding="{Binding PositionIndex, UpdateSourceTrigger=PropertyChanged}" Width="*" />
-                                <DataGridTextColumn Header="Amplitude" Binding="{Binding Amplitude, UpdateSourceTrigger=PropertyChanged, StringFormat=F3}" Width="*" />
-                                <DataGridTextColumn Header="Width" Binding="{Binding Width, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}" Width="*" />
+                                <DataGridTextColumn Header="Center FFT Bin" Binding="{Binding PositionIndex, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                                <DataGridTextColumn Header="Phase Slope" Binding="{Binding Amplitude, UpdateSourceTrigger=PropertyChanged, StringFormat=F3}" Width="*" />
+                                <DataGridTextColumn Header="Window Width" Binding="{Binding Width, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
@@ -349,7 +361,7 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
-                                            <controls:SignalPlot Grid.Row="2" Values="{Binding Samples}" MarkerIndices="{Binding MarkerIndices}" />
+                                            <controls:SignalPlot Grid.Row="2" Values="{Binding Samples}" MarkerIndices="{Binding MarkerIndices}" XAxisTitle="{Binding XAxisTitle}" YAxisTitle="{Binding YAxisTitle}" XStartValue="{Binding XStartValue}" XEndValue="{Binding XEndValue}" />
                                         </Grid>
                                     </DataTemplate>
                                 </TabControl.ContentTemplate>
@@ -378,9 +390,9 @@
                             <GroupBox Grid.Column="0" Header="Ground Truth Events" Margin="0,0,8,0">
                                 <DataGrid ItemsSource="{Binding ReflectionEvents}">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Index" Binding="{Binding PositionIndex}" Width="*" />
-                                        <DataGridTextColumn Header="Amplitude" Binding="{Binding Amplitude, StringFormat=F3}" Width="*" />
-                                        <DataGridTextColumn Header="Width" Binding="{Binding Width, StringFormat=F2}" Width="*" />
+                                        <DataGridTextColumn Header="Center FFT Bin" Binding="{Binding PositionIndex}" Width="*" />
+                                        <DataGridTextColumn Header="Phase Slope" Binding="{Binding Amplitude, StringFormat=F3}" Width="*" />
+                                        <DataGridTextColumn Header="Window Width" Binding="{Binding Width, StringFormat=F2}" Width="*" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </GroupBox>
@@ -412,4 +424,11 @@
         </Grid>
     </Grid>
 </Window>
+
+
+
+
+
+
+
 

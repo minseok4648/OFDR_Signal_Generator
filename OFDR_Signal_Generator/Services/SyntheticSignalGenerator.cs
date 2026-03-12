@@ -11,54 +11,57 @@ namespace OFDR_Signal_Generator.Services
         public SyntheticSignalResult Generate(SyntheticSignalRequest request)
         {
             var sampleCount = Math.Max(1, request.SampleCount);
-            var events = (request.Events ?? new List<ReflectionEvent>())
-                .Select(item => item.Clone())
-                .Where(item => item.PositionIndex >= 0 && item.PositionIndex < sampleCount)
-                .ToList();
-
-            var rawRandom = new Random(request.RandomSeed);
+            var events = GetValidEvents(request, sampleCount);
             var refRandom = new Random(request.RandomSeed + 97);
-            var rawSignal = BuildRawSignal(sampleCount, request, events, rawRandom);
             var referenceSignal = BuildReferenceSignal(sampleCount, request, refRandom);
+            var referenceComplex = referenceSignal.Select(value => new Complex(value, 0.0)).ToArray();
+            var rawComplex = ApplyEventsToBaseComplexSignal(referenceComplex, request);
 
             return new SyntheticSignalResult
             {
-                RawSignal = rawSignal,
+                RawSignal = rawComplex.Select(value => value.Real).ToArray(),
                 ReferenceSignal = referenceSignal,
-                RawComplexSignal = rawSignal.Select(value => new Complex(value, 0.0)).ToArray(),
-                ReferenceComplexSignal = referenceSignal.Select(value => new Complex(value, 0.0)).ToArray(),
+                RawComplexSignal = rawComplex,
+                ReferenceComplexSignal = referenceComplex,
                 GroundTruthEvents = events
             };
         }
 
-        private static double[] BuildRawSignal(int sampleCount, SyntheticSignalRequest request, IList<ReflectionEvent> events, Random random)
+        public double[] ApplyEventsToBaseSignal(double[] baseSignal, SyntheticSignalRequest request)
         {
-            var signal = new double[sampleCount];
+            var complexSource = (baseSignal == null ? new double[Math.Max(1, request.SampleCount)] : baseSignal)
+                .Select(value => new Complex(value, 0.0))
+                .ToArray();
+            return ApplyEventsToBaseComplexSignal(complexSource, request).Select(value => value.Real).ToArray();
+        }
 
-            for (var index = 0; index < sampleCount; index++)
+        public Complex[] ApplyEventsToBaseComplexSignal(Complex[] baseSignal, SyntheticSignalRequest request)
+        {
+            var source = baseSignal == null ? new Complex[Math.Max(1, request.SampleCount)] : baseSignal.ToArray();
+            var events = GetValidEvents(request, source.Length);
+            if (source.Length == 0)
             {
-                var normalized = index / (double)Math.Max(1, sampleCount - 1);
-                signal[index] = request.RawBaselineOffset * (1.0 - (request.RawAttenuation * normalized * 0.18));
+                return source;
             }
 
-            foreach (var reflectionEvent in events)
+            var output = source.ToArray();
+            if (events.Count > 0)
             {
-                var width = Math.Max(1.0, reflectionEvent.Width);
-                for (var index = 0; index < sampleCount; index++)
-                {
-                    var normalizedDistance = (index - reflectionEvent.PositionIndex) / width;
-                    var pulse = reflectionEvent.Amplitude * Math.Exp(-0.5 * normalizedDistance * normalizedDistance);
-                    var attenuationFactor = Math.Exp(-request.RawAttenuation * index / Math.Max(1.0, sampleCount));
-                    signal[index] += pulse * attenuationFactor;
-                }
+                var spectrum = ForwardTransform(output);
+                ApplyEventsToSpectrum(spectrum, events);
+                output = InverseTransform(spectrum);
             }
 
-            for (var index = 0; index < sampleCount; index++)
-            {
-                signal[index] += NextGaussian(random) * Math.Max(0.0, request.RawNoiseLevel);
-            }
+            ApplyNoiseToComplexSignal(output, request.RawNoiseLevel, new Random(request.RandomSeed + 11));
+            return output;
+        }
 
-            return signal;
+        private static IList<ReflectionEvent> GetValidEvents(SyntheticSignalRequest request, int sampleCount)
+        {
+            return (request.Events ?? new List<ReflectionEvent>())
+                .Select(item => item.Clone())
+                .Where(item => item.PositionIndex >= 0 && item.PositionIndex < sampleCount)
+                .ToList();
         }
 
         private static double[] BuildReferenceSignal(int sampleCount, SyntheticSignalRequest request, Random random)
@@ -79,6 +82,86 @@ namespace OFDR_Signal_Generator.Services
             }
 
             return signal;
+        }
+
+        private static void ApplyEventsToSpectrum(IList<Complex> spectrum, IEnumerable<ReflectionEvent> events)
+        {
+            var length = spectrum == null ? 0 : spectrum.Count;
+            if (length == 0)
+            {
+                return;
+            }
+
+            foreach (var reflectionEvent in events ?? Enumerable.Empty<ReflectionEvent>())
+            {
+                var center = Math.Max(0, Math.Min(length - 1, reflectionEvent.PositionIndex));
+                var width = Math.Max(2, (int)Math.Round(reflectionEvent.Width));
+                var halfWidth = Math.Max(1, width / 2);
+                var start = Math.Max(0, center - halfWidth);
+                var end = Math.Min(length - 1, center + halfWidth);
+                var localCenter = (start + end) / 2.0;
+                var slope = reflectionEvent.Amplitude;
+
+                for (var index = start; index <= end; index++)
+                {
+                    var normalized = (index - localCenter) / Math.Max(1.0, halfWidth);
+                    var window = 0.5 * (1.0 + Math.Cos(Math.PI * normalized));
+                    var phase = slope * (index - localCenter) * window;
+                    spectrum[index] *= Complex.FromPolarCoordinates(1.0, phase);
+                }
+            }
+        }
+
+        private static Complex[] ForwardTransform(Complex[] input)
+        {
+            return DiscreteFourierTransform(input ?? new Complex[0], false);
+        }
+
+        private static Complex[] InverseTransform(Complex[] spectrum)
+        {
+            return DiscreteFourierTransform(spectrum ?? new Complex[0], true);
+        }
+
+        private static Complex[] DiscreteFourierTransform(Complex[] input, bool inverse)
+        {
+            var length = input == null ? 0 : input.Length;
+            var output = new Complex[length];
+            if (length == 0)
+            {
+                return output;
+            }
+
+            var direction = inverse ? 1.0 : -1.0;
+            for (var k = 0; k < length; k++)
+            {
+                Complex sum = Complex.Zero;
+                for (var n = 0; n < length; n++)
+                {
+                    var angle = direction * 2.0 * Math.PI * k * n / length;
+                    var twiddle = new Complex(Math.Cos(angle), Math.Sin(angle));
+                    sum += input[n] * twiddle;
+                }
+
+                output[k] = inverse ? sum / length : sum;
+            }
+
+            return output;
+        }
+
+        private static void ApplyNoiseToComplexSignal(IList<Complex> signal, double noiseLevel, Random random)
+        {
+            if (signal == null || random == null)
+            {
+                return;
+            }
+
+            var noise = Math.Max(0.0, noiseLevel);
+            for (var index = 0; index < signal.Count; index++)
+            {
+                var real = NextGaussian(random) * noise;
+                var imaginary = NextGaussian(random) * noise;
+                signal[index] += new Complex(real, imaginary);
+            }
         }
 
         private static double NextGaussian(Random random)

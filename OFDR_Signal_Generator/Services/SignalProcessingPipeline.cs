@@ -9,6 +9,11 @@ namespace OFDR_Signal_Generator.Services
 {
     public sealed class SignalProcessingPipeline
     {
+        public const string FinalMetricAbsolutePeakOffset = "Absolute Peak Offset";
+        public const string FinalMetricSignedPeakOffset = "Signed Peak Offset";
+        public const string FinalMetricPeakAmplitude = "Peak Amplitude";
+        public const string FinalMetricPeakCenterDelta = "Peak-Center Delta";
+
         private readonly PipelineVerifier verifier;
 
         public SignalProcessingPipeline()
@@ -24,6 +29,7 @@ namespace OFDR_Signal_Generator.Services
             var referenceComplex = GetComplexSignal(signal == null ? null : signal.ReferenceComplexSignal, reference);
             var fftLength = CalculateFftLength(Math.Max(rawComplex.Length, referenceComplex.Length), request == null ? 1 : request.FftZeroPadFactor);
             var sampleSpacing = request == null ? 1.0 : Math.Max(0.0001, request.SampleSpacing);
+            var finalMetricMode = NormalizeFinalMetricMode(request == null ? null : request.FinalMetricMode);
 
             var rawSignalMagnitudes = rawComplex.Select(value => value.Magnitude).ToArray();
             var referenceSignalMagnitudes = referenceComplex.Select(value => value.Magnitude).ToArray();
@@ -43,29 +49,18 @@ namespace OFDR_Signal_Generator.Services
 
             var zeroLagIndices = ifftSegments.Select(segment => segment.Length / 2).ToList();
             var ifftPeakIndices = ifftSegments.Select(FindPeakIndex).ToList();
-            var representativeValues = ifftSegments
-                .Select((segment, index) => segment.Length == 0 ? 0.0 : Math.Abs(ifftPeakIndices[index] - zeroLagIndices[index]))
-                .ToList();
+            var representativeValues = BuildFinalMetricValues(finalMetricMode, ifftSegments, ifftPeakIndices, zeroLagIndices);
 
-            var finalProfile = BuildFinalProfile(representativeValues, segmentResult.SegmentCenterIndices, fftLength);
-            finalProfile = Smooth(finalProfile, request == null ? 5 : request.FinalSmoothingWindow);
-            finalProfile = Normalize(finalProfile);
+            var finalDisplayProfile = BuildRepresentativeProfile(representativeValues, segmentResult.SegmentCenterIndices, fftLength);
+            finalDisplayProfile = Smooth(finalDisplayProfile, request == null ? 5 : request.FinalSmoothingWindow);
 
-            var detectedEvents = DetectEvents(finalProfile, sampleSpacing, request == null ? 0.35 : request.PeakThresholdRatio);
+            var detectionProfile = Normalize(finalDisplayProfile.Select(Math.Abs).ToArray());
+            var detectedEvents = DetectEvents(detectionProfile, sampleSpacing, request == null ? 0.35 : request.PeakThresholdRatio);
             var comparison = verifier.Compare(signal == null ? null : signal.GroundTruthEvents, detectedEvents, sampleSpacing);
-
-            var stages = new List<StageResult>
-            {
-                BuildStage("Raw Data", "Active raw signal source before any spectral processing.", rawSignalMagnitudes, signal == null ? null : signal.GroundTruthEvents.Select(item => item.PositionIndex).ToArray()),
-                BuildStage("Ref Data", "Active reference signal source before any spectral processing.", referenceSignalMagnitudes, new int[0]),
-                BuildStage("Raw FFT", "Frequency-domain magnitude of the raw data after optional Hann windowing and zero padding.", rawSpectrumMagnitudes, null),
-                BuildStage("Ref FFT", "Frequency-domain magnitude of the reference data after optional Hann windowing and zero padding.", refSpectrumMagnitudes, null),
-                BuildStage("Final Result", "Segment-wise IFFT peak shift magnitude mapped onto position and normalized as the final OFDR difference profile.", finalProfile, detectedEvents.Select(item => item.PositionIndex).ToArray(), detectedEvents)
-            };
 
             return new PipelineRunResult
             {
-                Stages = stages,
+                Stages = new List<StageResult>(),
                 RawSignalMagnitudes = rawSignalMagnitudes,
                 ReferenceSignalMagnitudes = referenceSignalMagnitudes,
                 RawSpectrumMagnitudes = rawSpectrumMagnitudes,
@@ -78,26 +73,80 @@ namespace OFDR_Signal_Generator.Services
                 SegmentCenterIndices = segmentResult.SegmentCenterIndices,
                 SegmentRepresentativeValues = representativeValues,
                 IfftPeakIndices = ifftPeakIndices,
-                FinalProfile = finalProfile,
+                FinalDisplayProfile = finalDisplayProfile,
+                FinalProfile = finalDisplayProfile,
+                FinalMetricMode = finalMetricMode,
                 DetectedEvents = detectedEvents,
                 ComparisonSummary = comparison.Summary,
                 MatchResults = comparison.Rows
             };
         }
 
-        private static StageResult BuildStage(string name, string description, double[] samples, int[] markerIndices, IList<DetectedEvent> detectedEvents = null)
+        public static string NormalizeFinalMetricMode(string mode)
         {
-            var safeSamples = samples ?? new double[0];
-            var safeMarkers = markerIndices ?? new int[0];
-            return new StageResult
+            switch (mode)
             {
-                Name = name,
-                Description = description,
-                Samples = safeSamples,
-                MarkerIndices = safeMarkers,
-                Metrics = StageMath.BuildMetrics(safeSamples, safeMarkers.Length),
-                DetectedEvents = detectedEvents ?? new DetectedEvent[0]
-            };
+                case FinalMetricSignedPeakOffset:
+                case FinalMetricPeakAmplitude:
+                case FinalMetricPeakCenterDelta:
+                case FinalMetricAbsolutePeakOffset:
+                    return mode;
+                default:
+                    return FinalMetricAbsolutePeakOffset;
+            }
+        }
+
+        public static string GetFinalMetricYAxisTitle(string mode)
+        {
+            switch (NormalizeFinalMetricMode(mode))
+            {
+                case FinalMetricSignedPeakOffset:
+                    return "Shift (bins)";
+                case FinalMetricPeakAmplitude:
+                    return "Peak magnitude";
+                case FinalMetricPeakCenterDelta:
+                    return "Magnitude delta";
+                default:
+                    return "Offset (bins)";
+            }
+        }
+
+        private static IList<double> BuildFinalMetricValues(string mode, IList<Complex[]> ifftSegments, IList<int> peakIndices, IList<int> zeroLagIndices)
+        {
+            var metricMode = NormalizeFinalMetricMode(mode);
+            var values = new List<double>();
+            for (var index = 0; index < ifftSegments.Count; index++)
+            {
+                var segment = ifftSegments[index] ?? new Complex[0];
+                if (segment.Length == 0)
+                {
+                    values.Add(0.0);
+                    continue;
+                }
+
+                var peakIndex = peakIndices[index];
+                var zeroLagIndex = zeroLagIndices[index];
+                var peakMagnitude = segment[Math.Max(0, Math.Min(segment.Length - 1, peakIndex))].Magnitude;
+                var centerMagnitude = segment[Math.Max(0, Math.Min(segment.Length - 1, zeroLagIndex))].Magnitude;
+
+                switch (metricMode)
+                {
+                    case FinalMetricSignedPeakOffset:
+                        values.Add(peakIndex - zeroLagIndex);
+                        break;
+                    case FinalMetricPeakAmplitude:
+                        values.Add(peakMagnitude);
+                        break;
+                    case FinalMetricPeakCenterDelta:
+                        values.Add(peakMagnitude - centerMagnitude);
+                        break;
+                    default:
+                        values.Add(Math.Abs(peakIndex - zeroLagIndex));
+                        break;
+                }
+            }
+
+            return values;
         }
 
         private static int CalculateFftLength(int inputLength, int zeroPadFactor)
@@ -295,7 +344,7 @@ namespace OFDR_Signal_Generator.Services
             return peakIndex;
         }
 
-        private static double[] BuildFinalProfile(IList<double> representativeValues, IList<int> segmentCenterIndices, int outputLength)
+        private static double[] BuildRepresentativeProfile(IList<double> representativeValues, IList<int> segmentCenterIndices, int outputLength)
         {
             outputLength = Math.Max(1, outputLength);
             var profile = new double[outputLength];

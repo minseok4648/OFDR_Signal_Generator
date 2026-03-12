@@ -32,7 +32,11 @@ namespace OFDR_Signal_Generator.Processing
 
         public IList<int> IfftPeakIndices { get; set; }
 
+        public double[] FinalDisplayProfile { get; set; }
+
         public double[] FinalProfile { get; set; }
+
+        public string FinalMetricMode { get; set; }
 
         public IList<DetectedEvent> DetectedEvents { get; set; }
 

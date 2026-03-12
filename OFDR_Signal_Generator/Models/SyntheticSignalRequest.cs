@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace OFDR_Signal_Generator.Models
 {
@@ -43,6 +43,8 @@ namespace OFDR_Signal_Generator.Models
         public int FinalSmoothingWindow { get; set; }
 
         public double PeakThresholdRatio { get; set; }
+
+        public string FinalMetricMode { get; set; }
 
         public IList<ReflectionEvent> Events { get; set; }
     }
