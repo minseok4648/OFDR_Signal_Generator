@@ -1,0 +1,6 @@
+{
+  "SchemaVersion": 1,
+  "Executable": "build_verify_dual_aux_v3/OFDR_Signal_Generator.exe",
+  "Launcher": "Direct PowerShell script invocation",
+  "ObservationSeconds": 8
+}

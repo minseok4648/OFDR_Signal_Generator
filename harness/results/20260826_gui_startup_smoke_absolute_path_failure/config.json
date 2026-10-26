@@ -1,0 +1,7 @@
+{
+  "SchemaVersion": 1,
+  "Executable": "C:\\Project\\OFDR\\OFDR_Signal_Generator\\build_verify_spol_v3\\OFDR_Signal_Generator.exe",
+  "ResultsRoot": "C:\\Project\\OFDR\\OFDR_Signal_Generator\\harness\\results",
+  "ObservationSeconds": 5,
+  "Check": "GUI startup smoke harness absolute ResultsRoot handling"
+}

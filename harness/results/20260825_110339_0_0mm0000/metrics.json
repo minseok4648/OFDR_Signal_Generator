@@ -1,0 +1,40 @@
+{
+  "SchemaVersion": 1,
+  "SetId": "0_0mm0000",
+  "FftProvider": "Math.NET Numerics 5.0.0 / Intel MKL x64 revision 15 / process x64",
+  "KLinearization": {
+    "PhaseSpanRadians": 1375715.2050215364,
+    "MedianPhaseIncrementRadians": 0.27882831555325538,
+    "NonmonotonicRatio": 0.0,
+    "AcceptedAnchorCount": 5000000,
+    "SampleCount": 5000000,
+    "SweepDirection": 1
+  },
+  "XPolarization": {
+    "SampleCount": 5000000,
+    "SegmentCount": 156249,
+    "DetectedFeatureCount": 27,
+    "ProfileMin": 0.0,
+    "ProfileMax": 61.59375,
+    "ProfileMean": 13.584102399999917,
+    "ProfileRms": 16.019567417908718
+  },
+  "YPolarization": {
+    "SampleCount": 5000000,
+    "SegmentCount": 156249,
+    "DetectedFeatureCount": 29,
+    "ProfileMin": 0.0,
+    "ProfileMax": 61.459821428571431,
+    "ProfileMean": 13.275283199998993,
+    "ProfileRms": 15.603362086215069
+  },
+  "PerformanceMetrics": [
+    { "Name": "read_channels_sec", "Value": 0.2700281, "Unit": "s" },
+    { "Name": "k_linearization_sec", "Value": 0.642485, "Unit": "s" },
+    { "Name": "reference_fft_sec", "Value": 0.2663372, "Unit": "s" },
+    { "Name": "xpol_processing_sec", "Value": 0.8494935, "Unit": "s" },
+    { "Name": "ypol_processing_sec", "Value": 0.8443263, "Unit": "s" },
+    { "Name": "total_processing_sec", "Value": 2.8728653, "Unit": "s" },
+    { "Name": "peak_working_set_bytes", "Value": 934547456.0, "Unit": "bytes" }
+  ]
+}

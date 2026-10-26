@@ -1,0 +1,11 @@
+{
+  "SchemaVersion": 1,
+  "ProcessingConfig": "harness/configs/baseline_independent_pair_5m.json",
+  "ReferenceAuxiliary": "C:/Project/OFDR/Datas/OFDR Raw data/0_0mm0000CH1.isf",
+  "ReferenceSignal": "C:/Project/OFDR/Datas/OFDR Raw data/0_0mm0000CH2.isf",
+  "SignalPattern": "C:/Project/OFDR/Datas/OFDR Raw data/0_{1..9}mm0000CH{1,2}.isf",
+  "InsideRangeMeters": [5.5, 6.5],
+  "OutsideRangesMeters": [[3.7, 5.3], [6.7, 8.4]],
+  "ExpectedValuesSource": "Approximate plateau values read from the user-supplied reference image",
+  "DecisionRule": "All full runs complete; inside medians follow supplied plateaus; outside median remains near zero"
+}

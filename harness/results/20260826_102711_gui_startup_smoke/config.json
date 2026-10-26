@@ -1,0 +1,7 @@
+{
+    "SchemaVersion":  1,
+    "Executable":  "C:\\Project\\OFDR\\OFDR_Signal_Generator\\build_verify_gui_binding\\OFDR_Signal_Generator.exe",
+    "ExecutableSha256":  "4CCCFB9C5E77591B521AD341ECBA1D4FC4E39B4381209E26FB73061F874574F8",
+    "ObservationSeconds":  5,
+    "Check":  "WPF process startup and binding attachment"
+}

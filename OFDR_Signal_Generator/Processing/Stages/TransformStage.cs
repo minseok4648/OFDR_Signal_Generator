@@ -25,7 +25,7 @@ namespace OFDR_Signal_Generator.Processing.Stages
             return new StageResult
             {
                 Name = Name,
-                Description = "Builds a same-domain energy profile by emphasizing slope changes around reflection events.",
+                Description = "Reflection event 주변의 slope 변화를 강조해 같은 domain의 energy profile을 만듭니다.",
                 Samples = transformed,
                 MarkerIndices = new int[0],
                 Metrics = StageMath.BuildMetrics(transformed, 0),

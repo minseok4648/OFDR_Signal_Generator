@@ -7,7 +7,7 @@ namespace OFDR_Signal_Generator.Processing.Stages
     {
         public string Name
         {
-            get { return "Calibrated"; }
+            get { return "Calibration"; }
         }
 
         public StageResult Execute(StageContext context)
@@ -36,7 +36,7 @@ namespace OFDR_Signal_Generator.Processing.Stages
             return new StageResult
             {
                 Name = Name,
-                Description = "Applies a distance-based gain compensation and normalizes the profile to 0..1.",
+                Description = "거리 기반 gain compensation을 적용하고 profile을 0..1 범위로 normalize합니다.",
                 Samples = calibrated,
                 MarkerIndices = new int[0],
                 Metrics = StageMath.BuildMetrics(calibrated, 0),

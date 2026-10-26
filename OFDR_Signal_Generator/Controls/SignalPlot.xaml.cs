@@ -42,7 +42,7 @@ namespace OFDR_Signal_Generator.Controls
         public static readonly DependencyProperty XEndValueProperty =
             DependencyProperty.Register(nameof(XEndValue), typeof(double), typeof(SignalPlot), new PropertyMetadata(1.0, OnPlotPropertyChanged));
 
-        private readonly Stack<Tuple<int, int>> zoomHistory;
+        private readonly Stack<ZoomState> zoomHistory;
         private double[] plottedSamples;
         private double[] secondaryPlottedSamples;
         private double plotLeft;
@@ -54,13 +54,16 @@ namespace OFDR_Signal_Generator.Controls
         private double plotRange;
         private int viewStartIndex;
         private int viewEndIndex;
+        private bool hasManualYRange;
+        private double viewMinY;
+        private double viewMaxY;
         private bool isDraggingZoom;
         private Point zoomStartPoint;
         private Point zoomCurrentPoint;
 
         public SignalPlot()
         {
-            zoomHistory = new Stack<Tuple<int, int>>();
+            zoomHistory = new Stack<ZoomState>();
             InitializeComponent();
             Loaded += delegate { RenderPlot(); };
             SizeChanged += delegate { RenderPlot(); };
@@ -179,11 +182,16 @@ namespace OFDR_Signal_Generator.Controls
                 return;
             }
 
-            plotMin = visibleAllSamples.Min();
-            plotMax = visibleAllSamples.Max();
+            var automaticMin = visibleAllSamples.Min();
+            var automaticMax = visibleAllSamples.Max();
+            plotMin = hasManualYRange ? viewMinY : automaticMin;
+            plotMax = hasManualYRange ? viewMaxY : automaticMax;
             plotRange = plotMax - plotMin;
-            if (plotRange < 1e-9)
+            if (double.IsNaN(plotRange) || double.IsInfinity(plotRange) || plotRange < 1e-9)
             {
+                hasManualYRange = false;
+                plotMin = automaticMin;
+                plotMax = automaticMax;
                 plotRange = 1.0;
             }
 
@@ -208,6 +216,9 @@ namespace OFDR_Signal_Generator.Controls
             zoomHistory.Clear();
             viewStartIndex = 0;
             viewEndIndex = 0;
+            hasManualYRange = false;
+            viewMinY = 0.0;
+            viewMaxY = 0.0;
             isDraggingZoom = false;
         }
 
@@ -472,7 +483,7 @@ namespace OFDR_Signal_Generator.Controls
             SelectionRectangle.Visibility = Visibility.Collapsed;
 
             var point = e.GetPosition(PlotCanvas);
-            if (Math.Abs(point.X - zoomStartPoint.X) < 8.0)
+            if (Math.Abs(point.X - zoomStartPoint.X) < 8.0 || Math.Abs(point.Y - zoomStartPoint.Y) < 8.0)
             {
                 return;
             }
@@ -484,9 +495,28 @@ namespace OFDR_Signal_Generator.Controls
                 return;
             }
 
-            zoomHistory.Push(Tuple.Create(viewStartIndex, viewEndIndex));
+            var selectedTop = Math.Max(plotTop, Math.Min(plotTop + plotHeight, Math.Min(zoomStartPoint.Y, point.Y)));
+            var selectedBottom = Math.Max(plotTop, Math.Min(plotTop + plotHeight, Math.Max(zoomStartPoint.Y, point.Y)));
+            var selectedMaxY = GetYAxisValueFromPoint(selectedTop);
+            var selectedMinY = GetYAxisValueFromPoint(selectedBottom);
+            if (selectedMaxY - selectedMinY < 1e-12)
+            {
+                return;
+            }
+
+            zoomHistory.Push(new ZoomState
+            {
+                StartIndex = viewStartIndex,
+                EndIndex = viewEndIndex,
+                HasManualYRange = hasManualYRange,
+                MinY = viewMinY,
+                MaxY = viewMaxY
+            });
             viewStartIndex = startIndex;
             viewEndIndex = endIndex;
+            hasManualYRange = true;
+            viewMinY = selectedMinY;
+            viewMaxY = selectedMaxY;
             RenderPlot();
         }
 
@@ -495,8 +525,11 @@ namespace OFDR_Signal_Generator.Controls
             if (zoomHistory.Count > 0)
             {
                 var previousRange = zoomHistory.Pop();
-                viewStartIndex = previousRange.Item1;
-                viewEndIndex = previousRange.Item2;
+                viewStartIndex = previousRange.StartIndex;
+                viewEndIndex = previousRange.EndIndex;
+                hasManualYRange = previousRange.HasManualYRange;
+                viewMinY = previousRange.MinY;
+                viewMaxY = previousRange.MaxY;
             }
             else
             {
@@ -522,10 +555,11 @@ namespace OFDR_Signal_Generator.Controls
 
             var left = Math.Max(plotLeft, Math.Min(zoomStartPoint.X, zoomCurrentPoint.X));
             var right = Math.Min(plotLeft + plotWidth, Math.Max(zoomStartPoint.X, zoomCurrentPoint.X));
-            var top = plotTop;
-            var height = plotHeight;
+            var top = Math.Max(plotTop, Math.Min(zoomStartPoint.Y, zoomCurrentPoint.Y));
+            var bottom = Math.Min(plotTop + plotHeight, Math.Max(zoomStartPoint.Y, zoomCurrentPoint.Y));
+            var height = Math.Max(0.0, bottom - top);
             var width = Math.Max(0.0, right - left);
-            if (width < 1.0)
+            if (width < 1.0 || height < 1.0)
             {
                 SelectionRectangle.Visibility = Visibility.Collapsed;
                 return;
@@ -550,6 +584,13 @@ namespace OFDR_Signal_Generator.Controls
             var visibleIndex = (int)Math.Round(ratio * Math.Max(0, visibleCount - 1));
             visibleIndex = Math.Max(0, Math.Min(visibleCount - 1, visibleIndex));
             return viewStartIndex + visibleIndex;
+        }
+
+        private double GetYAxisValueFromPoint(double y)
+        {
+            var clampedY = Math.Max(plotTop, Math.Min(plotTop + plotHeight, y));
+            var ratio = (clampedY - plotTop) / Math.Max(1.0, plotHeight);
+            return plotMax - (ratio * plotRange);
         }
 
         private double GetXAxisValueForGlobalIndex(int globalIndex)
@@ -608,6 +649,15 @@ namespace OFDR_Signal_Generator.Controls
         {
             var normalized = (value - plotMin) / plotRange;
             return plotTop + (1.0 - normalized) * plotHeight;
+        }
+
+        private sealed class ZoomState
+        {
+            public int StartIndex { get; set; }
+            public int EndIndex { get; set; }
+            public bool HasManualYRange { get; set; }
+            public double MinY { get; set; }
+            public double MaxY { get; set; }
         }
     }
 }

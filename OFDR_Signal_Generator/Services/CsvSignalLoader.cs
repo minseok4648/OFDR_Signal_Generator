@@ -13,7 +13,7 @@ namespace OFDR_Signal_Generator.Services
         {
             if (string.IsNullOrWhiteSpace(path))
             {
-                throw new ArgumentException("CSV path is required.", nameof(path));
+                throw new ArgumentException("CSV 경로가 필요합니다.", nameof(path));
             }
 
             complexSamples = complexSamples ?? new Complex[0];
@@ -42,13 +42,13 @@ namespace OFDR_Signal_Generator.Services
         {
             if (string.IsNullOrWhiteSpace(path))
             {
-                throw new ArgumentException("CSV path is required.", nameof(path));
+                throw new ArgumentException("CSV 경로가 필요합니다.", nameof(path));
             }
 
             var lines = File.ReadAllLines(path);
             if (lines.Length == 0)
             {
-                throw new InvalidOperationException("CSV file is empty.");
+                throw new InvalidOperationException("CSV 파일이 비어 있습니다.");
             }
 
             string[] header = null;
@@ -79,7 +79,7 @@ namespace OFDR_Signal_Generator.Services
 
             if (header == null || dataRows.Count == 0)
             {
-                throw new InvalidOperationException("CSV file does not contain a readable header and data rows.");
+                throw new InvalidOperationException("CSV 파일에서 읽을 수 있는 header와 data row를 찾지 못했습니다.");
             }
 
             var headerLookup = header
@@ -93,7 +93,7 @@ namespace OFDR_Signal_Generator.Services
 
             if (amplitudeIndex < 0 && realIndex < 0)
             {
-                throw new InvalidOperationException("CSV file must contain either an Amplitude column or an I_Re column.");
+                throw new InvalidOperationException("CSV 파일에는 Amplitude column 또는 I_Re column이 있어야 합니다.");
             }
 
             var samples = new List<double>();
@@ -151,7 +151,7 @@ namespace OFDR_Signal_Generator.Services
 
             if (samples.Count == 0)
             {
-                throw new InvalidOperationException("No numeric samples could be parsed from the CSV file.");
+                throw new InvalidOperationException("CSV 파일에서 numeric sample을 읽지 못했습니다.");
             }
 
             double? sampleSpacing = null;

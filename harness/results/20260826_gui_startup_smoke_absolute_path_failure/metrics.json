@@ -1,0 +1,7 @@
+{
+  "Status": "FAILED",
+  "ProcessStarted": false,
+  "ErrorType": "System.NotSupportedException",
+  "ErrorMessage": "The given path's format is not supported.",
+  "Cause": "The smoke script joined an already rooted ResultsRoot to the current directory before Path.GetFullPath."
+}

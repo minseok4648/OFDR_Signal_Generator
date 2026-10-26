@@ -12,3 +12,11 @@ build_verify_ifft/
 build_verify_segments/
 build_verify_shift/
 build_verify_validation/
+build_verify_isf/
+build_verify*/
+
+# Harness: keep summaries/config/metrics, ignore only large generated artifacts.
+harness/results/**/artifacts/
+harness/**/*.partial
+harness/**/*.csv
+harness/**/*.bin

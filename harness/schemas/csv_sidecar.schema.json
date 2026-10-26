@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OFDR integrated CSV sidecar",
+  "type": "object",
+  "required": ["SchemaVersion", "SetId", "RowCount", "CsvFileName", "CsvSha256", "ConvertedUtc", "ConverterVersion", "Sources"],
+  "properties": {
+    "SchemaVersion": { "const": 1 },
+    "SetId": { "type": "string" },
+    "DisplacementMm": { "type": "number" },
+    "Repetition": { "type": "string" },
+    "RowCount": { "type": "integer", "minimum": 1 },
+    "CsvFileName": { "type": "string" },
+    "CsvSha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "ConvertedUtc": { "type": "string", "pattern": "^/Date\\([0-9+-]+\\)/$" },
+    "ConverterVersion": { "type": "string" },
+    "Sources": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["Channel", "Path", "FileSize", "Sha256", "Header"],
+        "properties": {
+          "Channel": { "type": "integer", "minimum": 1, "maximum": 3 },
+          "Path": { "type": "string" },
+          "FileSize": { "type": "integer", "minimum": 1 },
+          "Sha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+          "Header": { "type": "object" }
+        }
+      }
+    }
+  }
+}

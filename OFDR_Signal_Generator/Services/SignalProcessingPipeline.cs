@@ -38,23 +38,31 @@ namespace OFDR_Signal_Generator.Services
             var rawSpectrumMagnitudes = rawSpectrum.Select(value => value.Magnitude).ToArray();
             var referenceSpectrumMagnitudes = referenceSpectrum.Select(value => value.Magnitude).ToArray();
 
-            var segmentResult = BuildSegments(rawSpectrum, referenceSpectrum, request == null ? 64 : request.SegmentSize, request == null ? 32 : request.SegmentHop);
-            var segmentIfftLength = CalculateFftLength(segmentResult.RawSegments.Count == 0 ? 1 : segmentResult.RawSegments[0].Length, request == null ? 1 : request.FftZeroPadFactor);
-            var rawIfftSegments = segmentResult.RawSegments.Select(segment => InverseTransform(ZeroPadSegment(segment, segmentIfftLength))).Select(FftShift).ToList();
+            var syntheticSegmentResult = BuildSegments(rawSpectrum, referenceSpectrum, request == null ? 64 : request.SegmentSize, request == null ? 32 : request.SegmentHop);
+            var segmentIfftLength = CalculateFftLength(syntheticSegmentResult.RawSegments.Count == 0 ? 1 : syntheticSegmentResult.RawSegments[0].Length, request == null ? 1 : request.FftZeroPadFactor);
+            var rawIfftSegments = syntheticSegmentResult.RawSegments.Select(segment => InverseTransform(ZeroPadSegment(segment, segmentIfftLength))).Select(FftShift).ToList();
             ApplyRawSegmentShiftEvents(rawIfftSegments, request == null ? null : request.Events);
-            var referenceIfftSegments = segmentResult.ReferenceSegments.Select(segment => InverseTransform(ZeroPadSegment(segment, segmentIfftLength))).Select(FftShift).ToList();
-            var reconstructedRawSpectrum = ReconstructSpectrumFromShiftedSegments(rawIfftSegments, segmentResult.RawSegments, segmentResult.SegmentStartIndices, spectrumLength);
+            var referenceIfftSegments = syntheticSegmentResult.ReferenceSegments.Select(segment => InverseTransform(ZeroPadSegment(segment, segmentIfftLength))).Select(FftShift).ToList();
+
+            var reconstructedRawSpectrum = ReconstructSpectrumFromShiftedSegments(rawIfftSegments, syntheticSegmentResult.RawSegments, syntheticSegmentResult.SegmentStartIndices, spectrumLength);
             var reconstructedRawComplex = InverseTransform(reconstructedRawSpectrum);
             var reconstructedRawSignal = reconstructedRawComplex.Select(value => value.Real).ToArray();
-            var crossCorrelationSegments = rawIfftSegments
-                .Zip(referenceIfftSegments, (rawSegment, referenceSegment) => CrossCorrelate(rawSegment, referenceSegment, request))
+            rawSpectrumMagnitudes = reconstructedRawSpectrum.Select(value => value.Magnitude).ToArray();
+
+            var segmentResult = BuildSegments(reconstructedRawSpectrum, referenceSpectrum, request == null ? 64 : request.SegmentSize, request == null ? 32 : request.SegmentHop);
+            var conjugateMultiplySegments = segmentResult.RawSegments
+                .Zip(segmentResult.ReferenceSegments, (rawSegment, referenceSegment) => ConjugateMultiply(rawSegment, referenceSegment, request))
+                .ToList();
+            var ifftSegments = conjugateMultiplySegments
+                .Select(segment => InverseTransform(ZeroPadSegment(segment, segmentIfftLength)))
+                .Select(FftShift)
                 .ToList();
 
-            var zeroLagIndices = crossCorrelationSegments
+            var zeroLagIndices = ifftSegments
                 .Select(segment => segment.Length == 0 ? 0 : Math.Max(0, segment.Length / 2))
                 .ToList();
-            var peakIndices = crossCorrelationSegments.Select(FindPeakIndex).ToList();
-            var representativeValues = BuildFinalMetricValues(finalMetricMode, crossCorrelationSegments, peakIndices, zeroLagIndices);
+            var peakIndices = ifftSegments.Select(FindPeakIndex).ToList();
+            var representativeValues = BuildFinalMetricValues(finalMetricMode, ifftSegments, peakIndices, zeroLagIndices);
 
             var finalProfile = BuildRepresentativeProfile(representativeValues, segmentResult.SegmentCenterIndices, spectrumLength);
             finalProfile = Smooth(finalProfile, request == null ? 5 : request.FinalSmoothingWindow);
@@ -72,13 +80,14 @@ namespace OFDR_Signal_Generator.Services
                 ReferenceSpectrumMagnitudes = referenceSpectrumMagnitudes,
                 RawSegments = segmentResult.RawSegments,
                 ReferenceSegments = segmentResult.ReferenceSegments,
+                ConjugateMultiplySegments = conjugateMultiplySegments,
+                IfftSegments = ifftSegments,
                 RawIfftSegments = rawIfftSegments,
                 ReferenceIfftSegments = referenceIfftSegments,
-                CrossCorrelationSegments = crossCorrelationSegments,
                 SegmentStartIndices = segmentResult.SegmentStartIndices,
                 SegmentCenterIndices = segmentResult.SegmentCenterIndices,
                 SegmentRepresentativeValues = representativeValues,
-                CrossCorrelationPeakIndices = peakIndices,
+                IfftPeakIndices = peakIndices,
                 FinalDisplayProfile = finalProfile,
                 FinalProfile = finalProfile,
                 FinalMetricMode = finalMetricMode,
@@ -89,7 +98,6 @@ namespace OFDR_Signal_Generator.Services
                 MatchResults = comparison.Rows
             };
         }
-
         public static string NormalizeFinalMetricMode(string mode)
         {
             switch (mode)
@@ -119,13 +127,13 @@ namespace OFDR_Signal_Generator.Services
             }
         }
 
-        private static IList<double> BuildFinalMetricValues(string mode, IList<Complex[]> crossCorrelationSegments, IList<int> peakIndices, IList<int> zeroLagIndices)
+        private static IList<double> BuildFinalMetricValues(string mode, IList<Complex[]> ifftSegments, IList<int> peakIndices, IList<int> zeroLagIndices)
         {
             var metricMode = NormalizeFinalMetricMode(mode);
             var values = new List<double>();
-            for (var index = 0; index < crossCorrelationSegments.Count; index++)
+            for (var index = 0; index < ifftSegments.Count; index++)
             {
-                var segment = crossCorrelationSegments[index] ?? new Complex[0];
+                var segment = ifftSegments[index] ?? new Complex[0];
                 if (segment.Length == 0)
                 {
                     values.Add(0.0);
@@ -159,6 +167,32 @@ namespace OFDR_Signal_Generator.Services
             return values;
         }
 
+        private static Complex[] ConjugateMultiply(Complex[] rawSegment, Complex[] referenceSegment, SyntheticSignalRequest request)
+        {
+            rawSegment = rawSegment ?? new Complex[0];
+            referenceSegment = referenceSegment ?? new Complex[0];
+            var length = Math.Min(rawSegment.Length, referenceSegment.Length);
+            var output = new Complex[length];
+            var scale = request == null ? 1.0 : request.ConjugateMultiplyScale;
+            var normalize = request != null && request.NormalizeConjugateMultiply;
+
+            for (var index = 0; index < length; index++)
+            {
+                var value = rawSegment[index] * Complex.Conjugate(referenceSegment[index]) * scale;
+                if (normalize)
+                {
+                    var denominator = rawSegment[index].Magnitude * referenceSegment[index].Magnitude;
+                    if (denominator > 1e-12)
+                    {
+                        value /= denominator;
+                    }
+                }
+
+                output[index] = value;
+            }
+
+            return output;
+        }
         private static int CalculateFftLength(int inputLength, int zeroPadFactor)
         {
             var baseLength = Math.Max(1, inputLength);
@@ -436,49 +470,6 @@ namespace OFDR_Signal_Generator.Services
             return output;
         }
 
-        private static Complex[] CrossCorrelate(Complex[] rawSegment, Complex[] referenceSegment, SyntheticSignalRequest request)
-        {
-            rawSegment = rawSegment ?? new Complex[0];
-            referenceSegment = referenceSegment ?? new Complex[0];
-            if (rawSegment.Length == 0 || referenceSegment.Length == 0)
-            {
-                return new Complex[0];
-            }
-
-            var outputLength = rawSegment.Length + referenceSegment.Length - 1;
-            var output = new Complex[outputLength];
-            var scale = request == null ? 1.0 : request.ConjugateMultiplyScale;
-            var normalize = request != null && request.NormalizeConjugateMultiply;
-            var norm = 1.0;
-
-            if (normalize)
-            {
-                var rawEnergy = rawSegment.Sum(value => value.Magnitude * value.Magnitude);
-                var referenceEnergy = referenceSegment.Sum(value => value.Magnitude * value.Magnitude);
-                var denom = Math.Sqrt(rawEnergy * referenceEnergy);
-                if (denom > 1e-9)
-                {
-                    norm = denom;
-                }
-            }
-
-            for (var lag = -(referenceSegment.Length - 1); lag <= rawSegment.Length - 1; lag++)
-            {
-                Complex sum = Complex.Zero;
-                for (var rawIndex = 0; rawIndex < rawSegment.Length; rawIndex++)
-                {
-                    var referenceIndex = rawIndex - lag;
-                    if (referenceIndex >= 0 && referenceIndex < referenceSegment.Length)
-                    {
-                        sum += rawSegment[rawIndex] * Complex.Conjugate(referenceSegment[referenceIndex]);
-                    }
-                }
-
-                output[lag + referenceSegment.Length - 1] = (sum * scale) / norm;
-            }
-
-            return output;
-        }
 
         private static int FindPeakIndex(Complex[] segment)
         {
@@ -667,11 +658,4 @@ namespace OFDR_Signal_Generator.Services
             public IList<int> SegmentCenterIndices { get; set; }
         }
     }
-
-
-
-
-
-
-
 }

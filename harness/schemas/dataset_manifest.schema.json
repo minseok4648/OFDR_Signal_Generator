@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OFDR ISF dataset manifest",
+  "type": "object",
+  "required": ["SchemaVersion", "InputRoot", "ScannedUtc", "Sets"],
+  "properties": {
+    "SchemaVersion": { "const": 1 },
+    "InputRoot": { "type": "string" },
+    "ScannedUtc": { "type": "string", "pattern": "^/Date\\([0-9+-]+\\)/$" },
+    "Sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["SetId", "DisplacementMm", "Repetition", "PointCount", "SampleSpacingSeconds", "IsValid"],
+        "properties": {
+          "SetId": { "type": "string" },
+          "DisplacementMm": { "type": "number" },
+          "Repetition": { "type": "string", "pattern": "^[0-9]{4}$" },
+          "Channel1Path": { "type": ["string", "null"] },
+          "Channel2Path": { "type": ["string", "null"] },
+          "Channel3Path": { "type": ["string", "null"] },
+          "PointCount": { "type": "integer", "minimum": 0 },
+          "SampleSpacingSeconds": { "type": "number", "minimum": 0 },
+          "IsValid": { "type": "boolean" },
+          "ValidationMessage": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

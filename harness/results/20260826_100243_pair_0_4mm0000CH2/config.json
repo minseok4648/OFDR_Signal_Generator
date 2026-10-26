@@ -1,0 +1,1 @@
+{"SchemaVersion":1,"MaxAuxNonmonotonicRatio":1E-05,"WindowFunction":"Hann","SegmentSize":64,"SegmentHop":32,"SegmentIfftZeroPadFactor":2,"CrossCorrelationScale":1,"NormalizeCrossCorrelation":true,"MaxPreviewPoints":10000}

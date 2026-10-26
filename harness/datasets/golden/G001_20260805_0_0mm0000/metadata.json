@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "dataset_id": "G001_20260805_0_0mm0000",
+  "data_root": "${OFDR_DATA_ROOT}",
+  "set_id": "0_0mm0000",
+  "displacement_mm": 0.0,
+  "repetition": "0000",
+  "channels": {
+    "CH1": {
+      "file": "0_0mm0000CH1.isf",
+      "size_bytes": 10000488,
+      "sha256": "59EF2E9C01657F4037DF4933826F21C6004AFE74C7B2DCCA5644881425A6C986"
+    },
+    "CH2": {
+      "file": "0_0mm0000CH2.isf",
+      "size_bytes": 10000488,
+      "sha256": "AFFC905927629F1FAA2DA280CDDEF6BA6B2F8A2E13E78F5AD3CDC16E6E84E5A9"
+    },
+    "CH3": {
+      "file": "0_0mm0000CH3.isf",
+      "size_bytes": 10000488,
+      "sha256": "78A392FA018ED56590B3F63D6F962727D24614D51E90CCF83E5428DCA7DCD4FA"
+    }
+  },
+  "header_contract": {
+    "point_count": 5000000,
+    "bytes_per_sample": 2,
+    "bits_per_sample": 16,
+    "encoding": "BINARY",
+    "binary_format": "RI",
+    "byte_order": "MSB",
+    "sample_spacing_sec": 0.00000004
+  },
+  "axis_contract": "normalized_k_fft_lag_bins",
+  "decision": "NEEDS_MORE_TEST"
+}

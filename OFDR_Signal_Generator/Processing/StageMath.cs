@@ -15,7 +15,7 @@ namespace OFDR_Signal_Generator.Processing
 
             if (samples.Length == 0)
             {
-                metrics.Add(new StageMetric { Name = "Samples", Value = "0" });
+                metrics.Add(new StageMetric { Name = "Sample 수", Value = "0" });
                 return metrics;
             }
 
@@ -24,12 +24,12 @@ namespace OFDR_Signal_Generator.Processing
             var mean = samples.Average();
             var rms = Math.Sqrt(samples.Sum(value => value * value) / samples.Length);
 
-            metrics.Add(new StageMetric { Name = "Samples", Value = samples.Length.ToString(CultureInfo.InvariantCulture) });
+            metrics.Add(new StageMetric { Name = "Sample 수", Value = samples.Length.ToString(CultureInfo.InvariantCulture) });
             metrics.Add(new StageMetric { Name = "Min", Value = min.ToString("0.0000", CultureInfo.InvariantCulture) });
             metrics.Add(new StageMetric { Name = "Max", Value = max.ToString("0.0000", CultureInfo.InvariantCulture) });
             metrics.Add(new StageMetric { Name = "Mean", Value = mean.ToString("0.0000", CultureInfo.InvariantCulture) });
             metrics.Add(new StageMetric { Name = "RMS", Value = rms.ToString("0.0000", CultureInfo.InvariantCulture) });
-            metrics.Add(new StageMetric { Name = "Markers", Value = markerCount.ToString(CultureInfo.InvariantCulture) });
+            metrics.Add(new StageMetric { Name = "Marker 수", Value = markerCount.ToString(CultureInfo.InvariantCulture) });
             return metrics;
         }
 

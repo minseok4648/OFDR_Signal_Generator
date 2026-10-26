@@ -64,7 +64,7 @@ namespace OFDR_Signal_Generator.Processing.Stages
             return new StageResult
             {
                 Name = Name,
-                Description = "Finds local maxima in the calibrated profile and reports them as candidate reflection events.",
+                Description = "Calibration된 profile에서 local maximum을 찾아 candidate reflection event로 표시합니다.",
                 Samples = source.ToArray(),
                 MarkerIndices = markerIndices.ToArray(),
                 Metrics = StageMath.BuildMetrics(source, markerIndices.Count),

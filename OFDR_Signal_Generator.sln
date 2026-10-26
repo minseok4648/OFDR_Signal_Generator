@@ -4,17 +4,44 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.10.34928.147
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OFDR_Signal_Generator", "OFDR_Signal_Generator\OFDR_Signal_Generator.csproj", "{1A3C51B2-2D5E-46D6-A61A-0F30F1C5EBE5}"
+	ProjectSection(ProjectDependencies) = postProject
+		{B8F419DE-8BDA-42C1-8CF8-E5CB18535021} = {B8F419DE-8BDA-42C1-8CF8-E5CB18535021}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OFDR_Signal_Core", "OFDR_Signal_Core\OFDR_Signal_Core.csproj", "{B8F419DE-8BDA-42C1-8CF8-E5CB18535021}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OFDR_Harness", "OFDR_Harness\OFDR_Harness.csproj", "{5CC78AED-5907-42B3-82D4-45CDCC461489}"
+	ProjectSection(ProjectDependencies) = postProject
+		{B8F419DE-8BDA-42C1-8CF8-E5CB18535021} = {B8F419DE-8BDA-42C1-8CF8-E5CB18535021}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OFDR_Signal_Core.Tests", "OFDR_Signal_Core.Tests\OFDR_Signal_Core.Tests.csproj", "{A5020676-B2E7-4B5E-B8F7-65BB88CF5160}"
+	ProjectSection(ProjectDependencies) = postProject
+		{B8F419DE-8BDA-42C1-8CF8-E5CB18535021} = {B8F419DE-8BDA-42C1-8CF8-E5CB18535021}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
-		Release|Any CPU = Release|Any CPU
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{1A3C51B2-2D5E-46D6-A61A-0F30F1C5EBE5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{1A3C51B2-2D5E-46D6-A61A-0F30F1C5EBE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{1A3C51B2-2D5E-46D6-A61A-0F30F1C5EBE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{1A3C51B2-2D5E-46D6-A61A-0F30F1C5EBE5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1A3C51B2-2D5E-46D6-A61A-0F30F1C5EBE5}.Debug|x64.ActiveCfg = Debug|x64
+		{1A3C51B2-2D5E-46D6-A61A-0F30F1C5EBE5}.Debug|x64.Build.0 = Debug|x64
+		{1A3C51B2-2D5E-46D6-A61A-0F30F1C5EBE5}.Release|x64.ActiveCfg = Release|x64
+		{1A3C51B2-2D5E-46D6-A61A-0F30F1C5EBE5}.Release|x64.Build.0 = Release|x64
+		{B8F419DE-8BDA-42C1-8CF8-E5CB18535021}.Debug|x64.ActiveCfg = Debug|x64
+		{B8F419DE-8BDA-42C1-8CF8-E5CB18535021}.Debug|x64.Build.0 = Debug|x64
+		{B8F419DE-8BDA-42C1-8CF8-E5CB18535021}.Release|x64.ActiveCfg = Release|x64
+		{B8F419DE-8BDA-42C1-8CF8-E5CB18535021}.Release|x64.Build.0 = Release|x64
+		{5CC78AED-5907-42B3-82D4-45CDCC461489}.Debug|x64.ActiveCfg = Debug|x64
+		{5CC78AED-5907-42B3-82D4-45CDCC461489}.Debug|x64.Build.0 = Debug|x64
+		{5CC78AED-5907-42B3-82D4-45CDCC461489}.Release|x64.ActiveCfg = Release|x64
+		{5CC78AED-5907-42B3-82D4-45CDCC461489}.Release|x64.Build.0 = Release|x64
+		{A5020676-B2E7-4B5E-B8F7-65BB88CF5160}.Debug|x64.ActiveCfg = Debug|x64
+		{A5020676-B2E7-4B5E-B8F7-65BB88CF5160}.Debug|x64.Build.0 = Debug|x64
+		{A5020676-B2E7-4B5E-B8F7-65BB88CF5160}.Release|x64.ActiveCfg = Release|x64
+		{A5020676-B2E7-4B5E-B8F7-65BB88CF5160}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

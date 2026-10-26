@@ -20,11 +20,13 @@ namespace OFDR_Signal_Generator.Processing
 
         public IList<Complex[]> ReferenceSegments { get; set; }
 
+        public IList<Complex[]> ConjugateMultiplySegments { get; set; }
+
+        public IList<Complex[]> IfftSegments { get; set; }
+
         public IList<Complex[]> RawIfftSegments { get; set; }
 
         public IList<Complex[]> ReferenceIfftSegments { get; set; }
-
-        public IList<Complex[]> CrossCorrelationSegments { get; set; }
 
         public IList<int> SegmentStartIndices { get; set; }
 
@@ -32,7 +34,7 @@ namespace OFDR_Signal_Generator.Processing
 
         public IList<double> SegmentRepresentativeValues { get; set; }
 
-        public IList<int> CrossCorrelationPeakIndices { get; set; }
+        public IList<int> IfftPeakIndices { get; set; }
 
         public double[] FinalDisplayProfile { get; set; }
 

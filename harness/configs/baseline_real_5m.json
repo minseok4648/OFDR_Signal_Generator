@@ -1,0 +1,1 @@
+{"SchemaVersion":1,"EnableKLinearization":true,"MaxAuxNonmonotonicRatio":0.00001,"UseHannWindow":true,"SegmentSize":64,"SegmentHop":32,"SegmentIfftZeroPadFactor":2,"ConjugateMultiplyScale":1,"NormalizeConjugateMultiply":true,"FinalMetricMode":"Absolute Peak Offset","FinalSmoothingWindow":7,"PeakThresholdRatio":0.34,"MaxPreviewPoints":10000}

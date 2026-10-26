@@ -7,7 +7,7 @@ namespace OFDR_Signal_Generator.Processing.Stages
     {
         public string Name
         {
-            get { return "Preprocessed"; }
+            get { return "Preprocess"; }
         }
 
         public StageResult Execute(StageContext context)
@@ -18,7 +18,7 @@ namespace OFDR_Signal_Generator.Processing.Stages
                 return new StageResult
                 {
                     Name = Name,
-                    Description = "Subtracts DC offset and applies a short moving-average smoother.",
+                    Description = "DC offset을 제거하고 짧은 moving-average smoother를 적용합니다.",
                     Samples = source,
                     MarkerIndices = new int[0],
                     Metrics = StageMath.BuildMetrics(source, 0),
@@ -58,7 +58,7 @@ namespace OFDR_Signal_Generator.Processing.Stages
             return new StageResult
             {
                 Name = Name,
-                Description = "Subtracts DC offset and applies a short moving-average smoother.",
+                Description = "DC offset을 제거하고 짧은 moving-average smoother를 적용합니다.",
                 Samples = smoothed,
                 MarkerIndices = new int[0],
                 Metrics = StageMath.BuildMetrics(smoothed, 0),

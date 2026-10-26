@@ -1,0 +1,16 @@
+{
+  "ref_aux": "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\0_0mm0000CH1.isf",
+  "ref": "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\0_0mm0000CH2.isf",
+  "sig_aux": "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\0_4mm0000CH1.isf",
+  "sig": "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\0_4mm0000CH2.isf",
+  "output": "C:\\Project\\OFDR\\OFDR_Signal_Generator\\harness\\results\\20260828_dual_aux_probe_0_4mm0000CH2_s1024_p16",
+  "segment": 1024,
+  "hop": 256,
+  "pad": 16,
+  "start_m": 3.5,
+  "end_m": 8.7,
+  "deformation_start_m": 5.5,
+  "deformation_end_m": 6.5,
+  "opd": 18.2703,
+  "max_shift_ghz": 180.0
+}

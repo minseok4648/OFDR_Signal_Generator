@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OFDR independent channel CSV sidecar",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "SchemaVersion",
+    "MeasurementId",
+    "DisplacementMm",
+    "Repetition",
+    "ChannelNumber",
+    "RowCount",
+    "CsvFileName",
+    "CsvSha256",
+    "ConvertedUtc",
+    "ConverterVersion",
+    "Source"
+  ],
+  "properties": {
+    "SchemaVersion": { "const": 1 },
+    "MeasurementId": { "type": "string" },
+    "DisplacementMm": { "type": "number", "minimum": 0 },
+    "Repetition": { "type": "string", "pattern": "^[0-9]{4}$" },
+    "ChannelNumber": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "RowCount": { "type": "integer", "minimum": 1 },
+    "CsvFileName": { "type": "string", "pattern": "\\.csv$" },
+    "CsvSha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "ConvertedUtc": { "type": "string", "pattern": "^\\/Date\\([0-9]+\\)\\/$" },
+    "ConverterVersion": { "type": "string" },
+    "Source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["Channel", "Path", "FileSize", "Sha256", "Header"],
+      "properties": {
+        "Channel": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "Path": { "type": "string" },
+        "FileSize": { "type": "integer", "minimum": 1 },
+        "Sha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+        "Header": { "type": "object" }
+      }
+    }
+  }
+}

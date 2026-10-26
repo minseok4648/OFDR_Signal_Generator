@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "dataset_id": "G002_20260826_independent_0_4mm0000CH2",
+  "data_root": "C:\\Project\\OFDR\\Datas\\OFDR Raw data",
+  "roles": {
+    "auxiliary": {
+      "channel_id": "0_0mm0000CH1",
+      "source_file": "0_0mm0000CH1.isf",
+      "source_size_bytes": 10000488,
+      "source_sha256": "59EF2E9C01657F4037DF4933826F21C6004AFE74C7B2DCCA5644881425A6C986",
+      "converted_csv": "converted_channels\\0_0mm0000CH1.csv",
+      "csv_size_bytes": 181420931,
+      "csv_sha256": "851AE7370B52CB5F4BF27E45EA7202556D76C88F606B1B4CAC4B103B7919390D"
+    },
+    "reference": {
+      "channel_id": "0_0mm0000CH2",
+      "source_file": "0_0mm0000CH2.isf",
+      "source_size_bytes": 10000488,
+      "source_sha256": "AFFC905927629F1FAA2DA280CDDEF6BA6B2F8A2E13E78F5AD3CDC16E6E84E5A9",
+      "converted_csv": "converted_channels\\0_0mm0000CH2.csv",
+      "csv_size_bytes": 179649861,
+      "csv_sha256": "7B4320CD32D04627CA39BF338C566BBCF21ABE9C8C6EFBFAFCB89170ADD4FA13"
+    },
+    "signal": {
+      "channel_id": "0_4mm0000CH2",
+      "source_file": "0_4mm0000CH2.isf",
+      "source_size_bytes": 10000488,
+      "source_sha256": "E79ED60916F06386DF5D5BBE32B0E8C8654B2085EF2165A3DCCA1497DABB3A92",
+      "converted_csv": "converted_channels\\0_4mm0000CH2.csv",
+      "csv_size_bytes": 179789955,
+      "csv_sha256": "B53EC2E4E6EF339EF0357A2D3964A220B8DF11D54A8C22BCB4EBECD0B492B591"
+    }
+  },
+  "header_contract": {
+    "point_count": 5000000,
+    "bytes_per_sample": 2,
+    "bits_per_sample": 16,
+    "encoding": "BINARY",
+    "binary_format": "RI",
+    "byte_order": "MSB",
+    "sample_spacing_sec": 0.00000004
+  },
+  "channel_csv_contract": "Index,Time_s,Voltage_V",
+  "config": "harness/configs/baseline_independent_pair_5m.json",
+  "rejected_observation_result": "harness/results/20260826_100059_pair_0_4mm0000CH2",
+  "rejected_followup_results": [
+    "harness/results/20260826_113823_pair_0_4mm0000CH2",
+    "harness/results/20260826_114135_pair_0_4mm0000CH2"
+  ],
+  "accepted_result": "harness/results/20260826_114338_pair_0_4mm0000CH2",
+  "axis_contract": "normalized_k_distance_m_lag_bin_strain_microstrain_provisional",
+  "calibration_contract": {
+    "auxiliary_opd_m": 18.2703,
+    "distance_geometry_factor": 1.0,
+    "measurement_range_m": [5.5, 6.5],
+    "center_wavelength_nm": 1550.0,
+    "strain_coefficient": 0.78,
+    "deformation_length_m": 1.04,
+    "absolute_calibration_status": "NEEDS_EQUIPMENT_CONFIRMATION"
+  },
+  "decision": "ACCEPT"
+}

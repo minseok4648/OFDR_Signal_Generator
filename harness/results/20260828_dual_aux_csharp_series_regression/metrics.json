@@ -1,0 +1,23 @@
+{
+  "Status": "COMPLETED",
+  "Decision": "ACCEPT",
+  "Provider": "Math.NET Numerics 5.0.0 Intel MKL x64",
+  "SamplesPerChannel": 5000000,
+  "Series": [
+    {"DisplacementMm":0.1,"InsideMedianGHz":3.579421,"InsideMadGHz":0.251795,"OutsideMedianGHz":-0.054550,"OutsideMadGHz":0.075362,"ExpectedApproxGHz":3.6,"Result":"20260828_111148_pair_0_1mm0000CH2"},
+    {"DisplacementMm":0.2,"InsideMedianGHz":8.314081,"InsideMadGHz":0.222849,"OutsideMedianGHz":0.017290,"OutsideMadGHz":0.090397,"ExpectedApproxGHz":8.3,"Result":"20260828_111153_pair_0_2mm0000CH2"},
+    {"DisplacementMm":0.3,"InsideMedianGHz":15.535049,"InsideMadGHz":0.346658,"OutsideMedianGHz":0.022184,"OutsideMadGHz":0.142133,"ExpectedApproxGHz":15.5,"Result":"20260828_111158_pair_0_3mm0000CH2"},
+    {"DisplacementMm":0.4,"InsideMedianGHz":25.984624,"InsideMadGHz":0.198599,"OutsideMedianGHz":-0.026767,"OutsideMadGHz":0.106003,"ExpectedApproxGHz":26.0,"Result":"20260828_112245_pair_0_4mm0000CH2"},
+    {"DisplacementMm":0.5,"InsideMedianGHz":37.308954,"InsideMadGHz":0.304586,"OutsideMedianGHz":0.090979,"OutsideMadGHz":0.068020,"ExpectedApproxGHz":37.3,"Result":"20260828_111203_pair_0_5mm0000CH2"},
+    {"DisplacementMm":0.6,"InsideMedianGHz":50.196928,"InsideMadGHz":0.430747,"OutsideMedianGHz":0.006168,"OutsideMadGHz":0.136330,"ExpectedApproxGHz":50.2,"Result":"20260828_111207_pair_0_6mm0000CH2"},
+    {"DisplacementMm":0.7,"InsideMedianGHz":64.040217,"InsideMadGHz":0.496267,"OutsideMedianGHz":-0.065155,"OutsideMadGHz":0.108109,"ExpectedApproxGHz":64.0,"Result":"20260828_111212_pair_0_7mm0000CH2"},
+    {"DisplacementMm":0.8,"InsideMedianGHz":77.752904,"InsideMadGHz":0.591480,"OutsideMedianGHz":0.050895,"OutsideMadGHz":0.092453,"ExpectedApproxGHz":77.7,"Result":"20260828_111217_pair_0_8mm0000CH2"},
+    {"DisplacementMm":0.9,"InsideMedianGHz":91.937076,"InsideMadGHz":0.673671,"OutsideMedianGHz":0.115157,"OutsideMadGHz":0.108766,"ExpectedApproxGHz":91.9,"Result":"20260828_111222_pair_0_9mm0000CH2"}
+  ],
+  "ReferenceFftSlope": {
+    "Result": "20260828_112245_pair_0_4mm0000CH2",
+    "MedianDbAt4To4_5Meters": -83.312023,
+    "MedianDbAt7_5To8Meters": -93.697442,
+    "DifferenceDb": -10.385419
+  }
+}

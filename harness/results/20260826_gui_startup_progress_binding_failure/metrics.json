@@ -1,0 +1,8 @@
+{
+  "Status": "FAILED",
+  "ExceptionType": "System.InvalidOperationException",
+  "Property": "ProgressPercent",
+  "Target": "ProgressBar.Value",
+  "BindingMode": "Implicit TwoWay",
+  "DetectedBy": "User runtime execution"
+}

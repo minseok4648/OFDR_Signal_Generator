@@ -32,14 +32,14 @@
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
                         Margin="0,8,8,0">
-                <Button Content="Zoom Out"
+                <Button Content="한 단계 축소"
                         Click="ZoomOutButton_OnClick"
                         Padding="10,4"
                         Margin="0,0,6,0"
                         Background="#FF1E293B"
                         BorderBrush="#FF475569"
                         Foreground="White" />
-                <Button Content="Reset"
+                <Button Content="전체 보기"
                         Click="ResetZoomButton_OnClick"
                         Padding="10,4"
                         Background="#FF1E293B"
@@ -68,14 +68,14 @@
                        Margin="10,8,0,0"
                        Foreground="#FF94A3B8"
                        FontSize="11"
-                       Text="Drag to zoom, Zoom Out to step back, Reset to full view" />
+                       Text="확대할 X/Y 영역을 사각형으로 드래그하세요." />
 
             <TextBlock x:Name="EmptyStateText"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        Foreground="#FF94A3B8"
                        FontSize="14"
-                       Text="No stage data yet." />
+                       Text="표시할 데이터가 없습니다." />
         </Grid>
     </Border>
 </UserControl>

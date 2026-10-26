@@ -55,7 +55,7 @@ namespace OFDR_Signal_Generator.Services
                         Detected = detectedEvents[bestIndex].PositionIndex.ToString(CultureInfo.InvariantCulture),
                         ErrorSamples = bestError.ToString(CultureInfo.InvariantCulture),
                         ErrorDistance = (bestError * sampleSpacing).ToString("0.000", CultureInfo.InvariantCulture),
-                        Status = "Matched"
+                        Status = "일치"
                     });
                 }
                 else
@@ -67,7 +67,7 @@ namespace OFDR_Signal_Generator.Services
                         Detected = "-",
                         ErrorSamples = "-",
                         ErrorDistance = "-",
-                        Status = "Missed"
+                        Status = "미검출"
                     });
                 }
             }
@@ -86,7 +86,7 @@ namespace OFDR_Signal_Generator.Services
                     Detected = detectedEvents[index].PositionIndex.ToString(CultureInfo.InvariantCulture),
                     ErrorSamples = "-",
                     ErrorDistance = "-",
-                    Status = "False Positive"
+                    Status = "오검출"
                 });
             }
 

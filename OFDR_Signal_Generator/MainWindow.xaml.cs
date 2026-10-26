@@ -8,7 +8,9 @@ namespace OFDR_Signal_Generator
         public MainWindow()
         {
             InitializeComponent();
-            DataContext = new MainViewModel();
+            var viewModel = new OfdrWorkspaceViewModel();
+            DataContext = viewModel;
+            Closed += delegate { viewModel.Dispose(); };
         }
     }
 }

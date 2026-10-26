@@ -5,506 +5,450 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:controls="clr-namespace:OFDR_Signal_Generator.Controls"
         mc:Ignorable="d"
-        Title="OFDR Test Signal Generator"
-        Height="940"
-        Width="1580"
-        MinHeight="840"
-        MinWidth="1340"
-        Background="#FFF8FAFC">
+        Title="OFDR 독립 채널 분석 도구"
+        Height="940" Width="1600" MinHeight="820" MinWidth="1320"
+        Background="#FFF3F6FA">
     <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <Style TargetType="GroupBox">
-            <Setter Property="Margin" Value="0,0,0,14" />
+            <Setter Property="Margin" Value="6" />
             <Setter Property="Padding" Value="10" />
-            <Setter Property="BorderBrush" Value="#FFE2E8F0" />
+            <Setter Property="BorderBrush" Value="#FFD9E2EC" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Background" Value="White" />
         </Style>
-        <Style TargetType="TextBlock" x:Key="LabelText">
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="#FF334155" />
-            <Setter Property="Margin" Value="0,0,0,5" />
-        </Style>
         <Style TargetType="Button">
             <Setter Property="Margin" Value="0,0,8,8" />
-            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Padding" Value="13,7" />
             <Setter Property="Background" Value="#FF0F766E" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="BorderBrush" Value="#FF0F766E" />
         </Style>
-        <Style TargetType="DataGrid">
-            <Setter Property="AutoGenerateColumns" Value="False" />
-            <Setter Property="HeadersVisibility" Value="Column" />
-            <Setter Property="CanUserAddRows" Value="False" />
-            <Setter Property="CanUserDeleteRows" Value="False" />
-            <Setter Property="GridLinesVisibility" Value="Horizontal" />
-            <Setter Property="RowHeaderWidth" Value="0" />
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="Margin" Value="0,0,0,8" />
         </Style>
-        <Style TargetType="CheckBox">
-            <Setter Property="Margin" Value="0,6,0,0" />
-            <Setter Property="Foreground" Value="#FF1E293B" />
+        <Style TargetType="ComboBox">
+            <Setter Property="Padding" Value="5" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#FF334155" />
+            <Setter Property="Margin" Value="0,4,0,5" />
+        </Style>
+        <Style x:Key="PlotTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#FF0F172A" />
+            <Setter Property="Margin" Value="4,2,4,6" />
         </Style>
     </Window.Resources>
 
-    <Grid Margin="18">
+    <Grid Margin="14">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="450" />
-            <ColumnDefinition Width="18" />
+            <ColumnDefinition Width="430" />
+            <ColumnDefinition Width="12" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
         <Grid Grid.Column="0">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel Grid.Row="0" Margin="4,0,4,12">
+                <TextBlock Text="OFDR 독립 채널 분석" FontSize="25" FontWeight="Bold" Foreground="#FF0F172A" />
+                <TextBlock Margin="0,6,0,0" Foreground="#FF475569" TextWrapping="Wrap"
+                           Text="Ref와 Sig가 취득된 각 sweep의 CH1을 함께 선택하여 두 sweep을 독립 K-linearization한 뒤 Rayleigh spectral shift를 계산합니다." />
+            </StackPanel>
+
+            <TabControl Grid.Row="1" Margin="0,0,0,8">
+                <TabItem Header="데이터 불러오기">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="8">
+                            <GroupBox Header="기준 sweep 보조간섭계 · Ref와 동시 취득한 CH1">
+                                <StackPanel>
+                                    <TextBox Text="{Binding AuxiliaryPath}" IsReadOnly="True" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="파일 선택..." Command="{Binding BrowseAuxiliaryCommand}" />
+                                        <Button Content="채널 CSV 변환" Command="{Binding ConvertAuxiliaryCommand}" Background="#FF0369A1" BorderBrush="#FF0369A1" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="측정 sweep 보조간섭계 · Sig와 동시 취득한 CH1">
+                                <StackPanel>
+                                    <TextBox Text="{Binding SignalAuxiliaryPath}" IsReadOnly="True" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="파일 선택..." Command="{Binding BrowseSignalAuxiliaryCommand}" />
+                                        <Button Content="채널 CSV 변환" Command="{Binding ConvertSignalAuxiliaryCommand}" Background="#FF0369A1" BorderBrush="#FF0369A1" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="Ref · 0.0 mm CH2/CH3">
+                                <StackPanel>
+                                    <TextBox Text="{Binding ReferencePath}" IsReadOnly="True" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="파일 선택..." Command="{Binding BrowseReferenceCommand}" />
+                                        <Button Content="채널 CSV 변환" Command="{Binding ConvertReferenceCommand}" Background="#FF0369A1" BorderBrush="#FF0369A1" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="Sig · 0.0 mm 초과, Ref와 동일 채널">
+                                <StackPanel>
+                                    <TextBox Text="{Binding SignalPath}" IsReadOnly="True" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="파일 선택..." Command="{Binding BrowseSignalCommand}" />
+                                        <Button Content="채널 CSV 변환" Command="{Binding ConvertSignalCommand}" Background="#FF0369A1" BorderBrush="#FF0369A1" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="채널 CSV 출력 폴더">
+                                <StackPanel>
+                                    <TextBox Text="{Binding ChannelCsvOutputFolder}" />
+                                    <Button Content="출력 폴더 선택..." Command="{Binding BrowseOutputFolderCommand}" HorizontalAlignment="Left" />
+                                    <TextBlock Foreground="#FF64748B" TextWrapping="Wrap"
+                                               Text="채널별 CSV 형식: Index, Time_s, Voltage_V. 기존 통합 CSV도 각 역할에 필요한 CH 열만 선택하여 읽을 수 있습니다." />
+                                </StackPanel>
+                            </GroupBox>
+
+                            <Border Margin="6" Padding="10" CornerRadius="5" Background="#FFEFF6FF" BorderBrush="#FFBFDBFE" BorderThickness="1">
+                                <TextBlock Text="{Binding InputValidationText}" TextWrapping="Wrap" Foreground="#FF1E3A5F" />
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="알고리즘 설정">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="편광 채널" />
+                            <ComboBox ItemsSource="{Binding PolarizationOptions}" SelectedItem="{Binding SelectedPolarization}" />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Window Filter 종류" />
+                            <ComboBox ItemsSource="{Binding WindowFunctions}" SelectedItem="{Binding SelectedWindowFunction}" />
+                            <TextBlock Foreground="#FF64748B" Text="Rectangular, Hann(Hanning), Hamming, Blackman 중 선택" Margin="0,0,0,10" />
+
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,8,0">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Segment 크기" />
+                                    <TextBox Text="{Binding SegmentSize, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Segment 이동 간격" />
+                                    <TextBox Text="{Binding SegmentHop, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="IFFT Zero Padding 배율" />
+                            <TextBox Text="{Binding ZeroPadFactor, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="최대 Rayleigh Spectral Shift (GHz)" />
+                            <TextBox Text="{Binding MaximumSpectralShiftGHz, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Foreground="#FF64748B" TextWrapping="Wrap" Text="Cross Correlation peak는 이 물리 범위 안에서만 찾고 sub-bin 포물선 보간을 적용합니다." />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Cross Correlation 배율" />
+                            <TextBox Text="{Binding CorrelationScale, UpdateSourceTrigger=PropertyChanged}" />
+                            <CheckBox IsChecked="{Binding NormalizeCorrelation}" Content="Ref×Sig Cross Correlation 정규화" Margin="0,4,0,12" />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="CH1 비단조 비율 한계" />
+                            <TextBox Text="{Binding MaxNonmonotonicRatio, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="그래프 미리보기 최대 포인트" />
+                            <TextBox Text="{Binding MaxPreviewPoints, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Foreground="#FF64748B" TextWrapping="Wrap"
+                                       Text="5M 전체 배열은 화면에 직접 전달하지 않으며 최대 10,000 포인트의 최소/최대 윤곽선으로 표시합니다." />
+
+                            <GroupBox Header="거리축 교정 계수" Margin="0,14,0,4">
+                                <StackPanel>
+                                    <CheckBox IsChecked="{Binding UsePhysicalAxes}" Content="FFT와 Strain 결과에 물리축 적용" Margin="0,0,0,8" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,8,0">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="보조간섭계 물리 경로차 (m)" />
+                                            <TextBox Text="{Binding AuxiliaryPathDifferenceMeters, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="거리 기하 계수" />
+                                            <TextBox Text="{Binding DistanceGeometryFactor, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="보조간섭계 광섬유 Group Index" />
+                                    <TextBox Text="{Binding AuxiliaryGroupIndex, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="거리 Offset (m)" />
+                                    <TextBox Text="{Binding DistanceOffsetMeters, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Foreground="#FFB45309" TextWrapping="Wrap" Margin="0,0,0,8"
+                                               Text="18.2703 m를 보조간섭계의 물리 경로차로 사용합니다. spectral 축에는 Group Index를 적용하고, 거리축은 같은 광섬유 굴절률 상쇄를 가정합니다." />
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="Strain 환산 계수" Margin="0,4">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,8,0">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="중심 파장 (nm, 확인 필요)" />
+                                            <TextBox Text="{Binding CenterWavelengthNm, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Strain 계수 κₑ" />
+                                            <TextBox Text="{Binding StrainCoefficient, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,8,0">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Strain 배율" />
+                                            <TextBox Text="{Binding StrainScaleFactor, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Strain Offset (με)" />
+                                            <TextBox Text="{Binding StrainOffsetMicrostrain, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Foreground="#FFB45309" TextWrapping="Wrap"
+                                               Text="기본 중심 파장 1550 nm와 κₑ=0.78은 일반적인 시작값입니다. 실제 Laser와 Fiber 교정값을 확인한 뒤 정량 결과로 사용하세요." />
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="측정 메모와 기준값" Margin="0,4">
+                                <StackPanel>
+                                    <CheckBox IsChecked="{Binding RestrictToMeasurementRange}"
+                                              Content="거리별 Spectral shift 처리를 아래 분석 구간으로 제한" Margin="0,0,0,8" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,8,0">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="분석 시작 거리 (m)" />
+                                            <TextBox Text="{Binding AnalysisStartMeters, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="분석 종료 거리 (m)" />
+                                            <TextBox Text="{Binding AnalysisEndMeters, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,8,0">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="변형 시작 거리 (m)" />
+                                            <TextBox Text="{Binding MeasurementStartMeters, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="변형 종료 거리 (m)" />
+                                            <TextBox Text="{Binding MeasurementEndMeters, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="변형구간 길이 (m)" />
+                                    <TextBox Text="{Binding DeformationLengthMeters, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,8,0">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Sweep rate (nm/s)" />
+                                            <TextBox Text="{Binding SweepRateNmPerSecond, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Sweep range (nm)" />
+                                            <TextBox Text="{Binding SweepRangeNm, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Sampling rate (MS/s)" />
+                                    <TextBox Text="{Binding SamplingRateMsps, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Foreground="#FF64748B" TextWrapping="Wrap"
+                                               Text="메모: 측정 5.5~6.5 m, 변형 1.03~1.05 m, Loctite 접착부에서 Peak 손상 가능. 메모의 채널당 2M과 실제 ISF Header 5M이 다르므로 Point 수는 Header를 우선합니다. Sweep range 메모의 단위 nm/s는 nm 여부를 재확인하세요." />
+                                </StackPanel>
+                            </GroupBox>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+
+            <GroupBox Grid.Row="2" Header="실행 상태" Margin="0">
                 <StackPanel>
-                <TextBlock FontSize="28" FontWeight="Bold" Foreground="#FF0F172A" Text="OFDR Signal Process Lab" />
-                <TextBlock Margin="0,8,0,18" Foreground="#FF475569" Text="Configure synthetic settings or load CSV-formatted Raw/Ref beat signals, then inspect each OFDR stage. Sine test mode generates signed Raw/Ref sine signals directly from the configured amplitude, frequency, and phase values." TextWrapping="Wrap" />
-
-                <GroupBox Header="CSV Load">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource LabelText}" Text="Raw CSV Path" />
-                        <TextBox Text="{Binding RawCsvPath}" IsReadOnly="True" Margin="0,0,0,6" />
-                        <TextBlock Foreground="#FF475569" Text="{Binding RawCsvStatus}" TextWrapping="Wrap" Margin="0,0,0,8" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button Command="{Binding LoadRawCsvCommand}" Content="Load Raw CSV" />
-                            <Button Command="{Binding ClearRawCsvCommand}" Background="#FF64748B" BorderBrush="#FF64748B" Content="Clear Raw" />
-                        </StackPanel>
-
-                        <Separator Margin="0,8,0,8" />
-
-                        <TextBlock Style="{StaticResource LabelText}" Text="Ref CSV Path" />
-                        <TextBox Text="{Binding ReferenceCsvPath}" IsReadOnly="True" Margin="0,0,0,6" />
-                        <TextBlock Foreground="#FF475569" Text="{Binding ReferenceCsvStatus}" TextWrapping="Wrap" Margin="0,0,0,8" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button Command="{Binding LoadReferenceCsvCommand}" Content="Load Ref CSV" />
-                            <Button Command="{Binding ClearReferenceCsvCommand}" Background="#FF64748B" BorderBrush="#FF64748B" Content="Clear Ref" />
-                        </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="전체 처리 실행" Command="{Binding RunProcessingCommand}" />
+                        <Button Content="취소" Command="{Binding CancelCommand}" Background="#FFB45309" BorderBrush="#FFB45309" />
                     </StackPanel>
-                </GroupBox>
-
-                <GroupBox Header="Acquisition Settings">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,10,0">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Sample Count" />
-                            <TextBox Text="{Binding SampleCount, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Sample Spacing" />
-                            <TextBox Text="{Binding SampleSpacing, UpdateSourceTrigger=PropertyChanged, StringFormat=F8}" />
-                        </StackPanel>
-                        <StackPanel Grid.ColumnSpan="2" Margin="0,74,0,0">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Random Seed" />
-                            <TextBox Text="{Binding RandomSeed, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                    </Grid>
-                </GroupBox>
-
-                <GroupBox Header="Raw Signal Settings">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Raw Noise" />
-                            <TextBox Text="{Binding RawNoiseLevel, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Raw Attenuation" />
-                            <TextBox Text="{Binding RawAttenuation, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Raw Baseline Offset" />
-                            <TextBox Text="{Binding RawBaselineOffset, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-                    </Grid>
-                </GroupBox>
-
-                <GroupBox Header="Reference Signal Settings">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <StackPanel Margin="0,0,10,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Reference Amplitude" />
-                            <TextBox Text="{Binding ReferenceAmplitude, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Margin="0,0,0,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Reference Delay" />
-                            <TextBox Text="{Binding ReferenceDelaySamples, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" Margin="0,0,10,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Reference Width" />
-                            <TextBox Text="{Binding ReferenceWidth, UpdateSourceTrigger=PropertyChanged, StringFormat=F3}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Reference Noise" />
-                            <TextBox Text="{Binding ReferenceNoiseLevel, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="2" Margin="0,0,10,0">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Reference Baseline" />
-                            <TextBox Text="{Binding ReferenceBaselineOffset, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="2" Grid.Column="1">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Phase Shift (deg)" />
-                            <TextBox Text="{Binding ReferencePhaseShiftDegrees, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}" />
-                        </StackPanel>
-                    </Grid>
-                </GroupBox>
-
-                <GroupBox Header="Sine Test Signal Settings">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <CheckBox Grid.Row="0" Grid.Column="0" IsChecked="{Binding UseRawSineSignal}" Content="Use Raw Sine" Margin="0,0,10,8" />
-                        <CheckBox Grid.Row="0" Grid.Column="1" IsChecked="{Binding UseReferenceSineSignal}" Content="Use Ref Sine" Margin="0,0,0,8" />
-
-                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Raw Sine Amplitude" />
-                            <TextBox Text="{Binding RawSineAmplitude, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Ref Sine Amplitude" />
-                            <TextBox Text="{Binding ReferenceSineAmplitude, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-
-                        <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,10,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Raw Sine Frequency (cycles/window)" />
-                            <TextBox Text="{Binding RawSineFrequency, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Ref Sine Frequency (cycles/window)" />
-                            <TextBox Text="{Binding ReferenceSineFrequency, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-
-                        <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,10,0">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Raw Sine Phase (deg)" />
-                            <TextBox Text="{Binding RawSinePhaseDegrees, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="3" Grid.Column="1">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Ref Sine Phase (deg)" />
-                            <TextBox Text="{Binding ReferenceSinePhaseDegrees, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}" />
-                        </StackPanel>
-                    </Grid>
-                </GroupBox>
-
-                <GroupBox Header="FFT Settings">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,10,0">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Segment IFFT Zero Pad Factor" />
-                            <TextBox Text="{Binding FftZeroPadFactor, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Windowing" />
-                            <CheckBox IsChecked="{Binding UseHannWindow}" Content="Use Hann Window" />
-                        </StackPanel>
-                    </Grid>
-                </GroupBox>
-
-                <GroupBox Header="Segmentation Settings">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,10,0">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Segment Size" />
-                            <TextBox Text="{Binding SegmentSize, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Segment Hop" />
-                            <TextBox Text="{Binding SegmentHop, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                    </Grid>
-                </GroupBox>
-
-                <GroupBox Header="X-Corr Settings">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,10,0">
-                            <TextBlock Style="{StaticResource LabelText}" Text="X-Corr Scale" />
-                            <TextBox Text="{Binding ConjugateMultiplyScale, UpdateSourceTrigger=PropertyChanged, StringFormat=F4}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Normalization" />
-                            <CheckBox IsChecked="{Binding NormalizeConjugateMultiply}" Content="Normalize X-Corr" />
-                        </StackPanel>
-                    </Grid>
-                </GroupBox>
-                <GroupBox Header="Final Metric Settings">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,8">
-                            <TextBlock Style="{StaticResource LabelText}" Text="IFFT Feature Metric" />
-                            <ComboBox ItemsSource="{Binding FinalMetricModes}" SelectedItem="{Binding SelectedFinalMetricMode}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Smoothing Window" />
-                            <TextBox Text="{Binding FinalSmoothingWindow, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" Grid.Column="1">
-                            <TextBlock Style="{StaticResource LabelText}" Text="Peak Threshold Ratio" />
-                            <TextBox Text="{Binding PeakThresholdRatio, UpdateSourceTrigger=PropertyChanged, StringFormat=F3}" />
-                        </StackPanel>
-                    </Grid>
-                </GroupBox>
-
-                <GroupBox Header="Synthetic Raw Segment IFFT Shift Events">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
-                            <Button Command="{Binding AddEventCommand}" Content="Add Event" />
-                            <Button Command="{Binding RemoveEventCommand}" Background="#FFB45309" BorderBrush="#FFB45309" Content="Remove Selected" />
-                        </StackPanel>
-                        <DataGrid ItemsSource="{Binding ReflectionEvents}" SelectedItem="{Binding SelectedReflectionEvent}" MinHeight="220">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Target Segment" Binding="{Binding PositionIndex, UpdateSourceTrigger=PropertyChanged}" Width="*" />
-                                <DataGridTextColumn Header="Shift Bins" Binding="{Binding Amplitude, UpdateSourceTrigger=PropertyChanged, StringFormat=F0}" Width="*" />
-                                <DataGridTextColumn Header="Reserved" Binding="{Binding Width, UpdateSourceTrigger=PropertyChanged, StringFormat=F0}" Width="*" Visibility="Collapsed" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </DockPanel>
-                </GroupBox>
-                </StackPanel>
-            </ScrollViewer>
-
-            <GroupBox Grid.Row="1" Header="Actions" Margin="0,14,0,0">
-                <StackPanel>
-                    <Button Command="{Binding GenerateSignalCommand}" Content="Prepare Active Raw + Ref Data" />
-                    <Button Command="{Binding RunPipelineCommand}" Background="#FF1D4ED8" BorderBrush="#FF1D4ED8" Content="Run OFDR Pipeline" />
-                    <Button Command="{Binding ExportReconstructedRawCsvCommand}" Background="#FF7C3AED" BorderBrush="#FF7C3AED" Content="Export Reconstructed Raw CSV" />
-                    <Button Command="{Binding ResetDefaultsCommand}" Background="#FF475569" BorderBrush="#FF475569" Content="Reset Defaults" />
+                    <ProgressBar Height="16" Minimum="0" Maximum="100" Value="{Binding ProgressPercent, Mode=OneWay}" Margin="0,2,0,7" />
+                    <TextBlock Text="{Binding ProgressText}" TextWrapping="Wrap" Foreground="#FF334155" />
                 </StackPanel>
             </GroupBox>
         </Grid>
-        <Grid Grid.Column="2">
-            <TabControl Background="Transparent">
-                <TabItem Header="Stages">
-                    <Border Padding="12" Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="14">
+
+        <TabControl Grid.Column="2">
+            <TabItem Header="K-linearization">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="8">
+                        <Border Padding="10" Margin="6" Background="#FFEFF6FF" BorderBrush="#FFBFDBFE" BorderThickness="1" CornerRadius="5">
+                            <TextBlock TextWrapping="Wrap" Foreground="#FF1E3A5F"
+                                       Text="기준 sweep CH1과 측정 sweep CH1을 각각 위상 추출·보간한 뒤 더 짧은 공통 상대 위상 범위로 Ref/Sig를 맞춥니다." />
+                        </Border>
+                        <UniformGrid Columns="2">
+                            <GroupBox Header="기준 CH1 Raw">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.KDiagnostics.AuxiliaryRaw.Values}"
+                                                     XStartValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryRaw.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryRaw.XEnd}"
+                                                     XAxisTitle="샘플 번호" YAxisTitle="전압 (V)" />
+                            </GroupBox>
+                            <GroupBox Header="기준 CH1 평균 제거">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.KDiagnostics.AuxiliaryMeanRemoved.Values}"
+                                                     XStartValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryMeanRemoved.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryMeanRemoved.XEnd}"
+                                                     XAxisTitle="샘플 번호" YAxisTitle="전압 (V)" />
+                            </GroupBox>
+                            <GroupBox Header="기준 Hilbert Analytic 크기">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.KDiagnostics.AnalyticMagnitude.Values}"
+                                                     XStartValue="{Binding ProcessingResult.KDiagnostics.AnalyticMagnitude.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.AnalyticMagnitude.XEnd}"
+                                                     XAxisTitle="샘플 번호" YAxisTitle="크기" />
+                            </GroupBox>
+                            <GroupBox Header="기준 Hilbert Wrapped Phase">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.KDiagnostics.WrappedPhase.Values}"
+                                                     XStartValue="{Binding ProcessingResult.KDiagnostics.WrappedPhase.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.WrappedPhase.XEnd}"
+                                                     XAxisTitle="샘플 번호" YAxisTitle="위상 (rad)" />
+                            </GroupBox>
+                            <GroupBox Header="기준 Unwrapped 위상">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.KDiagnostics.UnwrappedPhase.Values}"
+                                                     XStartValue="{Binding ProcessingResult.KDiagnostics.UnwrappedPhase.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.UnwrappedPhase.XEnd}"
+                                                     XAxisTitle="샘플 번호" YAxisTitle="위상 (rad)" />
+                            </GroupBox>
+                            <GroupBox Header="기준 위상 증가량">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.KDiagnostics.PhaseIncrement.Values}"
+                                                     XStartValue="{Binding ProcessingResult.KDiagnostics.PhaseIncrement.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.PhaseIncrement.XEnd}"
+                                                     XAxisTitle="샘플 번호" YAxisTitle="위상 변화량 (rad)" />
+                            </GroupBox>
+                            <GroupBox Header="기준 공통 위상 Grid">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.KDiagnostics.UniformPhaseGrid.Values}"
+                                                     XStartValue="{Binding ProcessingResult.KDiagnostics.UniformPhaseGrid.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.UniformPhaseGrid.XEnd}"
+                                                     XAxisTitle="Normalized-k 샘플" YAxisTitle="위상 (rad)" />
+                            </GroupBox>
+                            <GroupBox Header="측정 CH1 Raw">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.SignalKDiagnostics.AuxiliaryRaw.Values}"
+                                                     XStartValue="{Binding ProcessingResult.SignalKDiagnostics.AuxiliaryRaw.XStart}" XEndValue="{Binding ProcessingResult.SignalKDiagnostics.AuxiliaryRaw.XEnd}"
+                                                     XAxisTitle="샘플 번호" YAxisTitle="전압 (V)" />
+                            </GroupBox>
+                            <GroupBox Header="측정 Unwrapped 위상">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.SignalKDiagnostics.UnwrappedPhase.Values}"
+                                                     XStartValue="{Binding ProcessingResult.SignalKDiagnostics.UnwrappedPhase.XStart}" XEndValue="{Binding ProcessingResult.SignalKDiagnostics.UnwrappedPhase.XEnd}"
+                                                     XAxisTitle="샘플 번호" YAxisTitle="위상 (rad)" />
+                            </GroupBox>
+                            <GroupBox Header="측정 위상 증가량">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.SignalKDiagnostics.PhaseIncrement.Values}"
+                                                     XStartValue="{Binding ProcessingResult.SignalKDiagnostics.PhaseIncrement.XStart}" XEndValue="{Binding ProcessingResult.SignalKDiagnostics.PhaseIncrement.XEnd}"
+                                                     XAxisTitle="샘플 번호" YAxisTitle="위상 변화량 (rad)" />
+                            </GroupBox>
+                            <GroupBox Header="측정 공통 위상 Grid">
+                                <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.SignalKDiagnostics.UniformPhaseGrid.Values}"
+                                                     XStartValue="{Binding ProcessingResult.SignalKDiagnostics.UniformPhaseGrid.XStart}" XEndValue="{Binding ProcessingResult.SignalKDiagnostics.UniformPhaseGrid.XEnd}"
+                                                     XAxisTitle="Normalized-k 샘플" YAxisTitle="위상 (rad)" />
+                            </GroupBox>
+                            <GroupBox Header="K-linearization QC">
+                                <StackPanel Margin="8">
+                                    <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding ProcessingResult.Polarization}" Margin="0,0,0,10" />
+                                    <TextBlock Text="{Binding ProcessingResult.AuxiliaryId, StringFormat=기준 Aux: {0}}" />
+                                    <TextBlock Text="{Binding ProcessingResult.SignalAuxiliaryId, StringFormat=측정 Aux: {0}}" />
+                                    <TextBlock Text="{Binding ProcessingResult.ReferenceId, StringFormat=Ref: {0}}" />
+                                    <TextBlock Text="{Binding ProcessingResult.SignalId, StringFormat=Sig: {0}}" />
+                                    <TextBlock Margin="0,12,0,0" Text="{Binding ProcessingResult.KLinearization.PhaseSpanRadians, StringFormat=기준 위상 범위: {0:G9} rad}" />
+                                    <TextBlock Text="{Binding ProcessingResult.KLinearization.MedianPhaseIncrementRadians, StringFormat=기준 위상 증가량 중앙값: {0:G9} rad}" />
+                                    <TextBlock Text="{Binding ProcessingResult.KLinearization.NonmonotonicRatio, StringFormat=기준 비단조 비율: {0:G9}}" />
+                                    <TextBlock Text="{Binding ProcessingResult.KLinearization.AcceptedAnchorCount, StringFormat=기준 사용 앵커 수: {0:N0}}" />
+                                    <TextBlock Margin="0,12,0,0" Text="{Binding ProcessingResult.SignalKLinearization.PhaseSpanRadians, StringFormat=측정 위상 범위: {0:G9} rad}" />
+                                    <TextBlock Text="{Binding ProcessingResult.SignalKLinearization.MedianPhaseIncrementRadians, StringFormat=측정 위상 증가량 중앙값: {0:G9} rad}" />
+                                    <TextBlock Text="{Binding ProcessingResult.SignalKLinearization.NonmonotonicRatio, StringFormat=측정 비단조 비율: {0:G9}}" />
+                                    <TextBlock Text="{Binding ProcessingResult.SignalKLinearization.AcceptedAnchorCount, StringFormat=측정 사용 앵커 수: {0:N0}}" />
+                                </StackPanel>
+                            </GroupBox>
+                        </UniformGrid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="S pol">
+                <DockPanel Margin="8">
+                    <Border DockPanel.Dock="Top" Padding="10" Margin="6" Background="#FFF0FDFA" BorderBrush="#FF99F6E4" BorderThickness="1" CornerRadius="5">
                         <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-
-                            <Border Padding="12" Margin="0,0,0,12" Background="#FFF8FAFC" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="2*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Margin="0,0,16,0">
-                                        <TextBlock FontWeight="SemiBold" Foreground="#FF0F172A" Text="Segment Inspector" />
-                                        <TextBlock Margin="0,6,0,0" Foreground="#FF475569" Text="{Binding SelectedSegmentSummary}" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Width="320">
-                                        <TextBlock Style="{StaticResource LabelText}" Text="Selected Segment" />
-                                        <ComboBox ItemsSource="{Binding SegmentLabels}" SelectedIndex="{Binding SelectedSegmentIndex}" MinWidth="300" Margin="0,0,0,8" />
-                                        <TextBlock Style="{StaticResource LabelText}" Text="X-Corr View" />
-                                        <ComboBox ItemsSource="{Binding ConjMulViewModes}" SelectedItem="{Binding SelectedConjMulViewMode}" MinWidth="300" />
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-
-                            <TabControl Grid.Row="1" ItemsSource="{Binding StageResults}" SelectedItem="{Binding SelectedStage}">
-                                <TabControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" />
-                                    </DataTemplate>
-                                </TabControl.ItemTemplate>
-                                <TabControl.ContentTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="8">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="*" />
-                                                <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="Auto" />
-                                            </Grid.RowDefinitions>
-                                            <TextBlock Text="{Binding Description}" Foreground="#FF475569" TextWrapping="Wrap" />
-                                            <ItemsControl Grid.Row="1" Margin="0,12,0,12" ItemsSource="{Binding Metrics}">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate>
-                                                        <WrapPanel />
-                                                    </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Margin="0,0,10,10" Padding="10" Background="#FFF8FAFC" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="10">
-                                                            <StackPanel Width="120">
-                                                                <TextBlock FontSize="12" Foreground="#FF64748B" Text="{Binding Name}" />
-                                                                <TextBlock Margin="0,6,0,0" FontSize="16" FontWeight="SemiBold" Foreground="#FF0F172A" Text="{Binding Value}" />
-                                                            </StackPanel>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                            <controls:SignalPlot Grid.Row="2" MinHeight="320" Values="{Binding Samples}" MarkerIndices="{Binding MarkerIndices}" XAxisTitle="{Binding XAxisTitle}" YAxisTitle="{Binding YAxisTitle}" XStartValue="{Binding XStartValue}" XEndValue="{Binding XEndValue}" />
-                                            <Border Grid.Row="3"
-                                                    Margin="0,12,0,0"
-                                                    Padding="12"
-                                                    Background="#FFF8FAFC"
-                                                    BorderBrush="#FFE2E8F0"
-                                                    BorderThickness="1"
-                                                    CornerRadius="12"
-                                                    Visibility="{Binding DataContext.IsCorrelationInspectorVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                <StackPanel>
-                                                    <TextBlock FontWeight="SemiBold" Foreground="#FF0F172A" Text="Lag Overlap Inspector" />
-                                                    <TextBlock Margin="0,6,0,10" Foreground="#FF475569" Text="{Binding DataContext.SelectedCorrelationLagSummary, RelativeSource={RelativeSource AncestorType=Window}}" TextWrapping="Wrap" />
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FF334155" Text="k (Lag)" />
-                                                        <Slider Grid.Column="1"
-                                                                Minimum="{Binding DataContext.SelectedCorrelationLagMinimum, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                Maximum="{Binding DataContext.SelectedCorrelationLagMaximum, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                Value="{Binding DataContext.SelectedCorrelationLag, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                IsSnapToTickEnabled="True"
-                                                                TickFrequency="1" />
-                                                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="#FF0F172A" FontWeight="SemiBold" Text="{Binding DataContext.SelectedCorrelationLag, RelativeSource={RelativeSource AncestorType=Window}, StringFormat='k = {0}'}" />
-                                                    </Grid>
-                                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                                        <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
-                                                            <Rectangle Width="12" Height="12" Fill="#FF38BDF8" Margin="0,0,6,0" />
-                                                            <TextBlock Foreground="#FF334155" Text="Raw Segment IFFT" />
-                                                        </StackPanel>
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <Rectangle Width="12" Height="12" Fill="#FFFB923C" Margin="0,0,6,0" />
-                                                            <TextBlock Foreground="#FF334155" Text="Shifted Ref Segment IFFT" />
-                                                        </StackPanel>
-                                                    </StackPanel>
-                                                </StackPanel>
-                                            </Border>
-                                            <controls:SignalPlot Grid.Row="4" MinHeight="240"
-                                                                 Margin="0,12,0,0"
-                                                                 Visibility="{Binding DataContext.IsCorrelationInspectorVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                                 Values="{Binding DataContext.CorrelationOverlayRawSamples, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                 SecondaryValues="{Binding DataContext.CorrelationOverlayReferenceSamples, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                 XAxisTitle="IFFT Sample Index"
-                                                                 YAxisTitle="Magnitude"
-                                                                 XStartValue="0"
-                                                                 XEndValue="{Binding DataContext.CorrelationOverlayXEndValue, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </TabControl.ContentTemplate>
-                            </TabControl>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="110" /><ColumnDefinition Width="Auto" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="선택 Segment 번호" Margin="0,0,8,0" />
+                            <TextBox Grid.Column="1" Text="{Binding SelectedSegmentIndex, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" />
+                            <Button Grid.Column="2" Content="Segment 그래프 확인" Command="{Binding InspectSegmentCommand}" Margin="0,0,12,0" />
+                            <TextBlock Grid.Column="3" Text="{Binding PeakDescription}" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="#FF134E4A" />
                         </Grid>
                     </Border>
-                </TabItem>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <Border Padding="10" Margin="6" Background="#FFFFF7ED" BorderBrush="#FFFED7AA" BorderThickness="1" CornerRadius="5">
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Text="처리 순서: 원본 Raw → sweep별 K 보정 → dB 거리 FFT → Segment → Window → IFFT → 제한 범위 Cross Correlation → sub-bin Spectral Shift/Strain" />
+                                    <TextBlock Margin="0,5,0,0" Text="{Binding CalibrationSummary}" TextWrapping="Wrap" Foreground="#FF9A3412" />
+                                </StackPanel>
+                            </Border>
+                            <UniformGrid Columns="2">
+                                <GroupBox Header="화면 1 · Raw 전압 · Sig / Ref">
+                                    <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.SignalRaw.Values}" SecondaryValues="{Binding ProcessingResult.ReferenceRaw.Values}"
+                                                         XStartValue="{Binding ProcessingResult.SignalRaw.XStart}" XEndValue="{Binding ProcessingResult.SignalRaw.XEnd}"
+                                                         XAxisTitle="{Binding ProcessingResult.SignalRaw.XAxisTitle}" YAxisTitle="{Binding ProcessingResult.SignalRaw.YAxisTitle}" />
+                                </GroupBox>
+                                <GroupBox Header="화면 2 · FFT · K-linearization 전 · Sig / Ref">
+                                    <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.PreKSignalSpectrum.Values}" SecondaryValues="{Binding ProcessingResult.PreKReferenceSpectrum.Values}"
+                                                         XStartValue="{Binding ProcessingResult.PreKSignalSpectrum.XStart}" XEndValue="{Binding ProcessingResult.PreKSignalSpectrum.XEnd}"
+                                                         XAxisTitle="{Binding ProcessingResult.PreKSignalSpectrum.XAxisTitle}" YAxisTitle="{Binding ProcessingResult.PreKSignalSpectrum.YAxisTitle}" />
+                                </GroupBox>
+                                <GroupBox Header="화면 3 · FFT 거리 데이터 · K-linearization 후 · Sig / Ref">
+                                    <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.SignalSpectrum.Values}" SecondaryValues="{Binding ProcessingResult.ReferenceSpectrum.Values}"
+                                                         XStartValue="{Binding ProcessingResult.SignalSpectrum.XStart}" XEndValue="{Binding ProcessingResult.SignalSpectrum.XEnd}"
+                                                         XAxisTitle="{Binding ProcessingResult.SignalSpectrum.XAxisTitle}" YAxisTitle="{Binding ProcessingResult.SignalSpectrum.YAxisTitle}" />
+                                </GroupBox>
+                                <GroupBox Header="화면 4 · 선택 Segment · K-linearization 후 FFT · Sig / Ref">
+                                    <controls:SignalPlot Height="250" Values="{Binding SelectedSegment.SignalSegment.Values}" SecondaryValues="{Binding SelectedSegment.ReferenceSegment.Values}"
+                                                         XStartValue="{Binding SelectedSegment.SignalSegment.XStart}" XEndValue="{Binding SelectedSegment.SignalSegment.XEnd}"
+                                                         XAxisTitle="{Binding SelectedSegment.SignalSegment.XAxisTitle}" YAxisTitle="{Binding SelectedSegment.SignalSegment.YAxisTitle}" />
+                                </GroupBox>
+                                <GroupBox Header="화면 5 · Window 적용 Segment · Sig / Ref">
+                                    <controls:SignalPlot Height="250" Values="{Binding SelectedSegment.WindowedSignalSegment.Values}" SecondaryValues="{Binding SelectedSegment.WindowedReferenceSegment.Values}"
+                                                         XStartValue="{Binding SelectedSegment.WindowedSignalSegment.XStart}" XEndValue="{Binding SelectedSegment.WindowedSignalSegment.XEnd}"
+                                                         XAxisTitle="{Binding SelectedSegment.WindowedSignalSegment.XAxisTitle}" YAxisTitle="{Binding SelectedSegment.WindowedSignalSegment.YAxisTitle}" />
+                                </GroupBox>
+                                <GroupBox Header="화면 6 · IFFT 국부 스펙트럼 · Sig / Ref">
+                                    <controls:SignalPlot Height="250" Values="{Binding SelectedSegment.SignalIfft.Values}" SecondaryValues="{Binding SelectedSegment.ReferenceIfft.Values}"
+                                                         XStartValue="{Binding SelectedSegment.SignalIfft.XStart}" XEndValue="{Binding SelectedSegment.SignalIfft.XEnd}"
+                                                         XAxisTitle="{Binding SelectedSegment.SignalIfft.XAxisTitle}" YAxisTitle="{Binding SelectedSegment.SignalIfft.YAxisTitle}" />
+                                </GroupBox>
+                                <GroupBox Header="화면 7 · Cross Correlation · 최고 Peak 위치">
+                                    <controls:SignalPlot Height="250" Values="{Binding SelectedSegment.Correlation.Values}" MarkerIndices="{Binding CorrelationPeakMarkers}"
+                                                         XStartValue="{Binding SelectedSegment.Correlation.XStart}" XEndValue="{Binding SelectedSegment.Correlation.XEnd}"
+                                                         XAxisTitle="{Binding SelectedSegment.Correlation.XAxisTitle}" YAxisTitle="{Binding SelectedSegment.Correlation.YAxisTitle}" />
+                                </GroupBox>
+                                <GroupBox Header="화면 8 · Cross Correlation Peak 확대">
+                                    <controls:SignalPlot Height="250" Values="{Binding SelectedSegment.CorrelationZoom.Values}" MarkerIndices="{Binding CorrelationZoomPeakMarkers}"
+                                                         XStartValue="{Binding SelectedSegment.CorrelationZoom.XStart}" XEndValue="{Binding SelectedSegment.CorrelationZoom.XEnd}"
+                                                         XAxisTitle="{Binding SelectedSegment.CorrelationZoom.XAxisTitle}" YAxisTitle="{Binding SelectedSegment.CorrelationZoom.YAxisTitle}" />
+                                </GroupBox>
+                                <GroupBox Header="화면 9 · 거리별 Rayleigh Spectral Shift">
+                                    <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.SpectralShiftProfile.Values}"
+                                                         XStartValue="{Binding ProcessingResult.SpectralShiftProfile.XStart}" XEndValue="{Binding ProcessingResult.SpectralShiftProfile.XEnd}"
+                                                         XAxisTitle="{Binding ProcessingResult.SpectralShiftProfile.XAxisTitle}" YAxisTitle="{Binding ProcessingResult.SpectralShiftProfile.YAxisTitle}" />
+                                </GroupBox>
+                                <GroupBox Header="화면 10 · 거리별 Strain 결과">
+                                    <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.StrainProfile.Values}"
+                                                         XStartValue="{Binding ProcessingResult.StrainProfile.XStart}" XEndValue="{Binding ProcessingResult.StrainProfile.XEnd}"
+                                                         XAxisTitle="{Binding ProcessingResult.StrainProfile.XAxisTitle}" YAxisTitle="{Binding ProcessingResult.StrainProfile.YAxisTitle}" />
+                                </GroupBox>
+                            </UniformGrid>
 
-                <TabItem Header="Ground Truth vs Detection">
-                    <Grid Margin="0,12,0,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-
-                        <Border Padding="12" Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="14">
-                            <TextBlock Foreground="#FF334155" Text="For loaded Raw CSV data there is no built-in ground truth, so the match table is meaningful only for synthetic raw signals." TextWrapping="Wrap" />
-                        </Border>
-
-                        <Grid Grid.Row="1" Margin="0,12,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <GroupBox Grid.Column="0" Header="Ground Truth Events" Margin="0,0,8,0">
-                                <DataGrid ItemsSource="{Binding ReflectionEvents}">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Target Segment" Binding="{Binding PositionIndex}" Width="*" />
-                                        <DataGridTextColumn Header="Shift Bins" Binding="{Binding Amplitude, StringFormat=F0}" Width="*" />
-                                        <DataGridTextColumn Header="Reserved" Binding="{Binding Width, StringFormat=F0}" Width="*" Visibility="Collapsed" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                            <GroupBox Header="선택 그래프 크게 보기" Margin="6,14,6,8">
+                                <StackPanel>
+                                    <ComboBox Width="360" HorizontalAlignment="Left" ItemsSource="{Binding LargeGraphOptions}" SelectedItem="{Binding SelectedLargeGraph}" />
+                                    <controls:SignalPlot Height="520" Values="{Binding LargeGraphPrimaryValues}" SecondaryValues="{Binding LargeGraphSecondaryValues}"
+                                                         MarkerIndices="{Binding LargeGraphMarkers}" XStartValue="{Binding LargeGraphXStart}" XEndValue="{Binding LargeGraphXEnd}"
+                                                         XAxisTitle="{Binding LargeGraphXAxisTitle}" YAxisTitle="{Binding LargeGraphYAxisTitle}" />
+                                </StackPanel>
                             </GroupBox>
-                            <GroupBox Grid.Column="1" Header="Detected Events" Margin="8,0,0,0">
-                                <DataGrid ItemsSource="{Binding DetectedEvents}">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Index" Binding="{Binding PositionIndex}" Width="*" />
-                                        <DataGridTextColumn Header="Amplitude" Binding="{Binding Amplitude, StringFormat=F3}" Width="*" />
-                                        <DataGridTextColumn Header="Distance" Binding="{Binding Distance, StringFormat=F6}" Width="*" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </GroupBox>
-                        </Grid>
-
-                        <GroupBox Grid.Row="2" Header="Event Match Table" Margin="0">
-                            <DataGrid ItemsSource="{Binding MatchResults}">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Expected" Binding="{Binding Expected}" Width="*" />
-                                    <DataGridTextColumn Header="Detected" Binding="{Binding Detected}" Width="*" />
-                                    <DataGridTextColumn Header="Error Samples" Binding="{Binding ErrorSamples}" Width="*" />
-                                    <DataGridTextColumn Header="Error Distance" Binding="{Binding ErrorDistance}" Width="*" />
-                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </GroupBox>
-                    </Grid>
-                </TabItem>
-            </TabControl>
-        </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </TabItem>
+        </TabControl>
     </Grid>
 </Window>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

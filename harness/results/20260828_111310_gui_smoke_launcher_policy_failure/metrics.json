@@ -1,0 +1,8 @@
+{
+  "Status": "FAILED",
+  "Stage": "Launcher before GUI process creation",
+  "ErrorType": "PSSecurityException",
+  "ErrorMessage": "running scripts is disabled on this system",
+  "GuiProcessStarted": false,
+  "Resolution": "Re-run with process-scoped -ExecutionPolicy Bypass"
+}

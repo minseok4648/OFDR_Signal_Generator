@@ -3,7 +3,7 @@
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
     <ProjectGuid>{1A3C51B2-2D5E-46D6-A61A-0F30F1C5EBE5}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <RootNamespace>OFDR_Signal_Generator</RootNamespace>
@@ -15,9 +15,12 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <GenerateResourceMSBuildArchitecture>CurrentArchitecture</GenerateResourceMSBuildArchitecture>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
@@ -26,8 +29,9 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
@@ -51,6 +55,7 @@
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
+    <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">
@@ -100,6 +105,7 @@
     <Compile Include="Services\SignalProcessingPipeline.cs" />
     <Compile Include="Services\SyntheticSignalGenerator.cs" />
     <Compile Include="ViewModels\MainViewModel.cs" />
+    <Compile Include="ViewModels\OfdrWorkspaceViewModel.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">
@@ -127,5 +133,31 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OFDR_Signal_Core\OFDR_Signal_Core.csproj">
+      <Project>{B8F419DE-8BDA-42C1-8CF8-E5CB18535021}</Project>
+      <Name>OFDR_Signal_Core</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <!--
+    This legacy WPF project does not reliably receive PackageReference runtime
+    assets through the SDK-style Core project reference. Keep the MKL packages
+    here as direct application dependencies so the provider and native runtime
+    are deployed with the executable.
+  -->
+  <ItemGroup>
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+    <PackageReference Include="MathNet.Numerics.Providers.MKL" Version="5.0.0" />
+    <PackageReference Include="MathNet.Numerics.MKL.Win-x64" Version="3.0.0" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Target Name="DeployMathNetMklNativeRuntime" AfterTargets="Build">
+    <ItemGroup>
+      <MathNetMklNative Include="$(TargetDir)runtimes\win-x64\native\libiomp5md.dll" Condition="Exists('$(TargetDir)runtimes\win-x64\native\libiomp5md.dll')" />
+      <MathNetMklNative Include="$(TargetDir)runtimes\win-x64\native\libMathNetNumericsMKL.dll" Condition="Exists('$(TargetDir)runtimes\win-x64\native\libMathNetNumericsMKL.dll')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MathNetMklNative)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+    <Error Condition="!Exists('$(TargetDir)MathNet.Numerics.Providers.MKL.dll')" Text="MathNet MKL provider deployment failed: MathNet.Numerics.Providers.MKL.dll is missing from $(TargetDir)." />
+    <Error Condition="!Exists('$(TargetDir)libMathNetNumericsMKL.dll')" Text="MathNet MKL native runtime deployment failed: libMathNetNumericsMKL.dll is missing from $(TargetDir)." />
+  </Target>
 </Project>
