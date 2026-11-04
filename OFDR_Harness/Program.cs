@@ -31,6 +31,8 @@ namespace OFDR_Harness
                     case "run": return Run(options, false);
                     case "run-csv": return RunCsv(options);
                     case "run-pair": return RunPair(options);
+                    case "preview-mode-hop": return ModeHopPreviewCommand.Run(options);
+                    case "inspect-mode-hop": options["inspect"] = "true"; return ModeHopPreviewCommand.Run(options);
                     case "evaluate": return Run(options, true);
                     default: Console.Error.WriteLine("Unknown command: " + command); return 2;
                 }
@@ -413,6 +415,8 @@ namespace OFDR_Harness
             Console.WriteLine("OFDR_Harness run-csv --csv path [--config path] [--results folder]");
             Console.WriteLine("OFDR_Harness run-pair --aux reference_ch1 --sig-aux signal_ch1 --ref path --sig path [--channel 2|3] [--config path] [--results folder]");
             Console.WriteLine("OFDR_Harness evaluate [--input folder] [--config path] [--results folder]");
+            Console.WriteLine("OFDR_Harness preview-mode-hop --csv path [--config path] [--results folder] [--golden]");
+            Console.WriteLine("OFDR_Harness inspect-mode-hop --csv path [--config preview_config] [--quality-config path] [--results folder] [--golden]");
             return 0;
         }
     }

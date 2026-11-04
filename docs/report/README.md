@@ -18,6 +18,14 @@
 
 ## 보고서 목록
 
+- `20261104_stitched_csv_export.md`: 마지막 진단 구간/접합 전체 CSV 저장, 원본 시간·인덱스 추적, 실제 5M 파일 및 저장 취소/실패 검증
+
+- `20261104_all_graph_zoom.md`: 모든 그래프의 휠·드래그 확대/축소, 이전/전체 복귀, WPF 검증 및 Core 동일성 확인
+
+- `20261104_auxiliary_stitch_quality.md`: Mode hop 제외 후 직접 접합, 선택 구간 위상/Grid·재추출 잔차 진단, 기존 5M 수치 회귀
+
+- `20261104_mode_hop_preview.md`: Tektronix CH2/CH3 전체 신호, Mode hop 제외 구간, 스윕 참고선, 5M 및 실제 WPF 검증
+
 - `20261026_latest_head_diff.md`: 최신 로컬 커밋 대비 누적 변경 diff, 포함 범위와 기존 검증 근거
 - `20260825_csv_file_processing_update.md`: 통합 CSV 직접 처리와 사용법 추가
 - `20260825_mkl_gui_fullrun_fix.md`: MKL 배포 오류 수정과 첫 5M full run

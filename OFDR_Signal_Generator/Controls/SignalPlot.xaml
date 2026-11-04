@@ -2,7 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              MinHeight="220"
-             MinWidth="300">
+             MinWidth="300"
+             ToolTip="휠: 확대/축소 · 드래그: 영역 확대 · 우클릭: 이전 · 더블클릭: 전체">
     <Border Background="#FF0F172A"
             BorderBrush="#FFCBD5E1"
             BorderThickness="1"
@@ -15,7 +16,10 @@
                     MouseMove="PlotCanvas_OnMouseMove"
                     MouseLeave="PlotCanvas_OnMouseLeave"
                     MouseLeftButtonDown="PlotCanvas_OnMouseLeftButtonDown"
-                    MouseLeftButtonUp="PlotCanvas_OnMouseLeftButtonUp" />
+                    MouseLeftButtonUp="PlotCanvas_OnMouseLeftButtonUp"
+                    MouseWheel="PlotCanvas_OnMouseWheel"
+                    MouseRightButtonDown="PlotCanvas_OnMouseRightButtonDown"
+                    LostMouseCapture="PlotCanvas_OnLostMouseCapture" />
 
             <Rectangle x:Name="SelectionRectangle"
                        Visibility="Collapsed"
@@ -65,10 +69,10 @@
             <TextBlock x:Name="InteractionHintText"
                        HorizontalAlignment="Left"
                        VerticalAlignment="Top"
-                       Margin="10,8,0,0"
+                       Margin="90,8,0,0"
                        Foreground="#FF94A3B8"
                        FontSize="11"
-                       Text="확대할 X/Y 영역을 사각형으로 드래그하세요." />
+                       Text="휠: 확대/축소 · 드래그: 영역 확대" />
 
             <TextBlock x:Name="EmptyStateText"
                        HorizontalAlignment="Center"

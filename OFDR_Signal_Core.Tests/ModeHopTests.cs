@@ -1,0 +1,176 @@
+using System;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using OFDR_Signal_Core.Models;
+using OFDR_Signal_Core.Processing;
+using OFDR_Signal_Core.Services;
+
+namespace OFDR_Signal_Core.Tests
+{
+    [TestClass]
+    public sealed class ModeHopTests
+    {
+        private string folder;
+        private readonly ModeHopPreviewEngine engine = new ModeHopPreviewEngine();
+        [TestInitialize] public void Initialize() { folder = Path.Combine(Path.GetTempPath(), "OFDR_ModeHop_" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(folder); }
+        [TestCleanup] public void Cleanup() { Directory.Delete(folder, true); }
+
+        private string Csv(double[] trigger, double dt = 0.001, double[] auxiliary = null)
+        {
+            var path = Path.Combine(folder, Guid.NewGuid().ToString("N") + ".csv");
+            using (var writer = new StreamWriter(path, false, new UTF8Encoding(true)))
+            {
+                writer.WriteLine("Model,DPO4104B\n\nSample Interval," + dt.ToString("G17", CultureInfo.InvariantCulture) + ",\nRecord Length," + trigger.Length.ToString("E", CultureInfo.InvariantCulture) + ",\nHorizontal Units,s,\nVertical Units,V,V\n,,\nTIME,CH2,CH3");
+                for (var i = 0; i < trigger.Length; i++)
+                    writer.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0:E6},{1:G17},{2:G17}", -2 + i * dt, trigger[i], auxiliary == null ? i * 0.001 : auxiliary[i]));
+                writer.WriteLine();
+            }
+            return path;
+        }
+
+        [TestMethod]
+        public void ReaderUsesHeaderTimeAndKeepsRoundedDuplicateRows()
+        {
+            var data = new TekScopeCsvReader().Read(Csv(new[] { 0.2, 3.4, 3.4, 0.2, 0.2 }, 8e-7), CancellationToken.None);
+            Assert.AreEqual(5, data.SampleCount); Assert.AreEqual(-2, data.SourceStartSeconds);
+            Assert.AreEqual(4e-6, data.DurationSeconds, 1e-15); Assert.AreEqual(64, data.Sha256.Length);
+            Assert.AreEqual(3.4, data.Trigger[2]); Assert.AreEqual(0.002, data.Auxiliary[2]);
+        }
+
+        [TestMethod]
+        public void RegionsAreStrictHighAndHalfOpenIncludingRecordEdges()
+        {
+            var data = new TekScopeCsvReader().Read(Csv(new[] { 3.4, 3.4, 1.8, 0.2, 3.4 }), CancellationToken.None);
+            var result = engine.Detect(data, new ModeHopSettings(), CancellationToken.None);
+            Assert.AreEqual(2, result.Ranges.Count); Assert.AreEqual(3L, result.ExcludedSamples);
+            Assert.AreEqual(0, result.Ranges[0].StartIndex); Assert.AreEqual(2, result.Ranges[0].EndIndexExclusive);
+            Assert.AreEqual(4, result.Ranges[1].StartIndex); Assert.AreEqual(5, result.Ranges[1].EndIndexExclusive);
+            Assert.AreEqual(0.003, result.ExcludedSeconds, 1e-15);
+        }
+
+        [TestMethod]
+        public void NoHighAndAllHighAreValid()
+        {
+            var data = new TekScopeCsvReader().Read(Csv(new[] { 3.4, 3.4 }), CancellationToken.None);
+            Assert.AreEqual(0, engine.Detect(data, new ModeHopSettings { ThresholdVoltage = 4 }, CancellationToken.None).Ranges.Count);
+            var all = engine.Detect(data, new ModeHopSettings(), CancellationToken.None);
+            Assert.AreEqual(1, all.Ranges.Count); Assert.AreEqual(100, all.ExcludedPercent);
+        }
+
+        [TestMethod]
+        public void RecalculationPreservesRawAndDoesNotNeedSourceFile()
+        {
+            var path = Csv(new[] { 0.2, 1.9, 3.4, 0.2 });
+            var data = new TekScopeCsvReader().Read(path, CancellationToken.None);
+            var original = data.Auxiliary.ToArray();
+            File.Delete(path);
+            Assert.AreEqual(2L, engine.Detect(data, new ModeHopSettings(), CancellationToken.None).ExcludedSamples);
+            Assert.AreEqual(1L, engine.Detect(data, new ModeHopSettings { ThresholdVoltage = 2 }, CancellationToken.None).ExcludedSamples);
+            CollectionAssert.AreEqual(original, data.Auxiliary);
+        }
+
+        [TestMethod]
+        public void PreviewPreservesExtremaActualPositionsAndZoomResamplesOriginal()
+        {
+            var aux = new double[20000]; aux[123] = 9; aux[456] = -7;
+            var trigger = new double[20000]; trigger[333] = 3.4;
+            var data = new TekScopeCsvReader().Read(Csv(trigger, 1e-5, aux), CancellationToken.None);
+            var settings = new ModeHopSettings { MaximumPreviewPoints = 100 };
+            var analysis = engine.Detect(data, settings, CancellationToken.None);
+            var preview = engine.Preview(data, analysis, settings, 0, data.DurationSeconds, CancellationToken.None);
+            Assert.IsLessThanOrEqualTo(100, preview.Auxiliary.Values.Length);
+            var peak = Array.IndexOf(preview.Auxiliary.Values, 9);
+            Assert.IsGreaterThanOrEqualTo(0, peak); Assert.AreEqual(0.00123, preview.Auxiliary.Seconds[peak], 1e-14);
+            CollectionAssert.Contains(preview.Auxiliary.Values, -7.0);
+            var zoom = engine.Preview(data, analysis, settings, 0.0033, 0.0034, CancellationToken.None);
+            CollectionAssert.Contains(zoom.Trigger.Values, 3.4);
+            Assert.AreEqual(1, zoom.Ranges.Count); Assert.AreEqual(333, zoom.Ranges[0].StartIndex);
+        }
+
+        [TestMethod]
+        public void SweepPeriodOriginAndBlankSettingsRoundTrip()
+        {
+            var data = new TekScopeCsvReader().Read(Csv(new double[4000]), CancellationToken.None);
+            var settings = new ModeHopSettings { SweepDurationSeconds = 1.2, SweepOriginSeconds = 0.1 };
+            var analysis = engine.Detect(data, settings, CancellationToken.None);
+            var view = engine.Preview(data, analysis, settings, 0, 4, CancellationToken.None);
+            Assert.AreEqual(4, view.SweepBoundaries.Count); Assert.AreEqual(1.3, view.SweepBoundaries[1].Seconds, 1e-12);
+            settings.SweepDurationSeconds = null;
+            var path = Path.Combine(folder, "settings.json"); JsonContractSerializer.Write(path, settings);
+            var restored = JsonContractSerializer.Read<ModeHopSettings>(path); restored.Validate();
+            Assert.IsNull(restored.SweepDurationSeconds);
+            Assert.AreEqual(0, engine.Preview(data, analysis, restored, 0, 4, CancellationToken.None).SweepBoundaries.Count);
+        }
+
+        [TestMethod]
+        public void DenseSweepMarkersAreBoundedAndReported()
+        {
+            var data = new TekScopeCsvReader().Read(Csv(new double[10000], 1e-5), CancellationToken.None);
+            var settings = new ModeHopSettings { SweepDurationSeconds = 1e-5 };
+            var view = engine.Preview(data, engine.Detect(data, settings, CancellationToken.None), settings, 0, data.DurationSeconds, CancellationToken.None);
+            Assert.IsTrue(view.SweepMarkersDecimated); Assert.IsLessThanOrEqualTo(500, view.SweepBoundaries.Count);
+        }
+
+        [TestMethod]
+        public void ReaderRejectsMissingChannelsCountMismatchAndInvalidNumbers()
+        {
+            foreach (var pair in new[] { Tuple.Create("TIME,CH2,CH3", "TIME,CH1,CH3"), Tuple.Create("Record Length,2.000000E+000", "Record Length,3"), Tuple.Create("0.20000000000000001,0", "NaN,0") })
+            {
+                var path = Csv(new[] { 0.2, 3.4 });
+                var original = File.ReadAllText(path); var modified = original.Replace(pair.Item1, pair.Item2);
+                Assert.AreNotEqual(original, modified); File.WriteAllText(path, modified);
+                Assert.ThrowsExactly<InvalidDataException>(() => new TekScopeCsvReader().Read(path, CancellationToken.None));
+            }
+        }
+
+        [TestMethod]
+        public void ReaderRejectsTooManyRowsAndTimeReversal()
+        {
+            var path = Csv(new[] { 0.2, 3.4 }); File.AppendAllText(path, "-1.9,0.2,0\n");
+            Assert.ThrowsExactly<InvalidDataException>(() => new TekScopeCsvReader().Read(path, CancellationToken.None));
+            path = Csv(new[] { 0.2, 3.4 }); File.WriteAllText(path, File.ReadAllText(path).Replace("-1.999000E+000", "-2.001000E+000"));
+            Assert.ThrowsExactly<InvalidDataException>(() => new TekScopeCsvReader().Read(path, CancellationToken.None));
+        }
+
+        [TestMethod]
+        public void ReaderDetectsSourceChangedDuringRead()
+        {
+            var path = Csv(new double[131072]);
+            var progress = new InlineProgress(value => { if (value.Percent < 100) File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1)); });
+            Assert.ThrowsExactly<IOException>(() => new TekScopeCsvReader().Read(path, CancellationToken.None, progress));
+        }
+
+        [TestMethod]
+        public void CancellationStopsReadingDetectionAndPreview()
+        {
+            var path = Csv(new double[131072]); var reader = new TekScopeCsvReader();
+            using (var cancel = new CancellationTokenSource())
+            {
+                var progress = new InlineProgress(value => cancel.Cancel());
+                Assert.ThrowsExactly<OperationCanceledException>(() => reader.Read(path, cancel.Token, progress));
+                var data = reader.Read(path, CancellationToken.None);
+                Assert.ThrowsExactly<OperationCanceledException>(() => engine.Detect(data, new ModeHopSettings(), cancel.Token));
+                var analysis = engine.Detect(data, new ModeHopSettings(), CancellationToken.None);
+                Assert.ThrowsExactly<OperationCanceledException>(() => engine.Preview(data, analysis, new ModeHopSettings(), 0, data.DurationSeconds, cancel.Token));
+            }
+        }
+
+        [TestMethod]
+        public void InvalidSettingsAreRejected()
+        {
+            foreach (var settings in new[] { new ModeHopSettings { ThresholdVoltage = double.NaN }, new ModeHopSettings { SweepDurationSeconds = 0 }, new ModeHopSettings { SweepOriginSeconds = -1 }, new ModeHopSettings { MaximumPreviewPoints = 10001 } })
+                Assert.ThrowsExactly<ArgumentException>(() => settings.Validate());
+        }
+
+        private sealed class InlineProgress : IProgress<OperationProgress>
+        {
+            private readonly Action<OperationProgress> action;
+            public InlineProgress(Action<OperationProgress> action) { this.action = action; }
+            public void Report(OperationProgress value) { action(value); }
+        }
+    }
+}

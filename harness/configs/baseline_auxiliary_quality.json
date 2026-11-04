@@ -1,0 +1,6 @@
+{
+  "StartSeconds": 0,
+  "EndSeconds": 1.2,
+  "MaximumNonmonotonicRatio": 0.00001,
+  "MaximumPreviewPoints": 10000
+}

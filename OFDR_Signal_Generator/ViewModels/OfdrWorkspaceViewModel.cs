@@ -17,6 +17,7 @@ namespace OFDR_Signal_Generator.ViewModels
 {
     public sealed class OfdrWorkspaceViewModel : ObservableObject, IDisposable
     {
+        public ModeHopPreviewViewModel ModeHopPreview { get; } = new ModeHopPreviewViewModel();
         private const string DefaultDataRoot = @"C:\Project\OFDR\Datas\OFDR Raw data";
         private readonly OfdrChannelFileReader channelReader = new OfdrChannelFileReader();
         private readonly OfdrChannelCsvConverter channelConverter = new OfdrChannelCsvConverter();
@@ -428,6 +429,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
         public void Dispose()
         {
+            ModeHopPreview.Dispose();
             cancellation?.Cancel();
             cancellation?.Dispose();
             ProcessingResult?.Dispose();

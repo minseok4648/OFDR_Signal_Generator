@@ -1,0 +1,6 @@
+{
+  "ThresholdVoltage": 1.8,
+  "SweepDurationSeconds": 1.2,
+  "SweepOriginSeconds": 0,
+  "MaximumPreviewPoints": 10000
+}

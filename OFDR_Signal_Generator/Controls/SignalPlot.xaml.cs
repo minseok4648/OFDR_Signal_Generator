@@ -155,7 +155,7 @@ namespace OFDR_Signal_Generator.Controls
             EmptyStateText.Visibility = sampleCount > 1 ? Visibility.Collapsed : Visibility.Visible;
             HoverPopup.Visibility = Visibility.Collapsed;
             SelectionRectangle.Visibility = Visibility.Collapsed;
-            InteractionHintText.Visibility = sampleCount > 1 ? Visibility.Visible : Visibility.Collapsed;
+            InteractionHintText.Visibility = sampleCount > 1 && ActualWidth >= 600 ? Visibility.Visible : Visibility.Collapsed;
 
             var width = Math.Max(0.0, ActualWidth - 10.0);
             var height = Math.Max(0.0, ActualHeight - 10.0);
@@ -334,6 +334,7 @@ namespace OFDR_Signal_Generator.Controls
         {
             var polyline = new Polyline
             {
+                Clip = new RectangleGeometry(new Rect(plotLeft, plotTop, plotWidth, plotHeight)),
                 Stroke = stroke,
                 StrokeThickness = thickness,
                 SnapsToDevicePixels = true,
@@ -377,6 +378,8 @@ namespace OFDR_Signal_Generator.Controls
                     StrokeThickness = 1.0,
                     StrokeDashArray = new DoubleCollection { 3.0, 3.0 }
                 });
+
+                if (y < plotTop || y > plotTop + plotHeight) continue;
 
                 var marker = new Ellipse
                 {
@@ -463,6 +466,8 @@ namespace OFDR_Signal_Generator.Controls
                 return;
             }
 
+            if (e.ClickCount == 2) { ResetZoom(); e.Handled = true; return; }
+
             isDraggingZoom = true;
             zoomStartPoint = point;
             zoomCurrentPoint = point;
@@ -483,25 +488,33 @@ namespace OFDR_Signal_Generator.Controls
             SelectionRectangle.Visibility = Visibility.Collapsed;
 
             var point = e.GetPosition(PlotCanvas);
-            if (Math.Abs(point.X - zoomStartPoint.X) < 8.0 || Math.Abs(point.Y - zoomStartPoint.Y) < 8.0)
+            ZoomSelection(zoomStartPoint, point);
+            e.Handled = true;
+        }
+
+        internal Rect InteractionArea => new Rect(plotLeft, plotTop, plotWidth, plotHeight);
+        internal Rect ZoomBounds => new Rect(viewStartIndex, plotMin, Math.Max(0, viewEndIndex - viewStartIndex), Math.Max(0, plotRange));
+        internal bool ZoomSelection(Point first, Point point)
+        {
+            if (GetSampleCount() < 2 || Math.Abs(point.X - first.X) < 8.0)
             {
-                return;
+                return false;
             }
 
-            var startIndex = GetGlobalIndexFromPoint(Math.Min(zoomStartPoint.X, point.X));
-            var endIndex = GetGlobalIndexFromPoint(Math.Max(zoomStartPoint.X, point.X));
+            var startIndex = GetGlobalIndexFromPoint(Math.Min(first.X, point.X));
+            var endIndex = GetGlobalIndexFromPoint(Math.Max(first.X, point.X));
             if (endIndex - startIndex < 2)
             {
-                return;
+                return false;
             }
 
-            var selectedTop = Math.Max(plotTop, Math.Min(plotTop + plotHeight, Math.Min(zoomStartPoint.Y, point.Y)));
-            var selectedBottom = Math.Max(plotTop, Math.Min(plotTop + plotHeight, Math.Max(zoomStartPoint.Y, point.Y)));
+            var selectedTop = Math.Abs(point.Y - first.Y) < 8 ? plotTop : Math.Max(plotTop, Math.Min(plotTop + plotHeight, Math.Min(first.Y, point.Y)));
+            var selectedBottom = Math.Abs(point.Y - first.Y) < 8 ? plotTop + plotHeight : Math.Max(plotTop, Math.Min(plotTop + plotHeight, Math.Max(first.Y, point.Y)));
             var selectedMaxY = GetYAxisValueFromPoint(selectedTop);
             var selectedMinY = GetYAxisValueFromPoint(selectedBottom);
             if (selectedMaxY - selectedMinY < 1e-12)
             {
-                return;
+                return false;
             }
 
             zoomHistory.Push(new ZoomState
@@ -518,7 +531,40 @@ namespace OFDR_Signal_Generator.Controls
             viewMinY = selectedMinY;
             viewMaxY = selectedMaxY;
             RenderPlot();
+            return true;
         }
+
+        internal bool ZoomAt(Point point, int delta)
+        {
+            var count = GetSampleCount();
+            if (count < 2 || isDraggingZoom || !InteractionArea.Contains(point) || delta == 0) return false;
+            double left, right, minY, maxY;
+            var factor = PlotZoomWindow.WheelFactor(delta);
+            PlotZoomWindow.ScaleRange(viewStartIndex, viewEndIndex, 0, count - 1, (point.X - plotLeft) / plotWidth, factor, out left, out right);
+            var all = plottedSamples.Concat(secondaryPlottedSamples).ToArray();
+            var fullMin = all.Min(); var fullMax = all.Max();
+            if (fullMax - fullMin < 1e-9) fullMax = fullMin + 1;
+            PlotZoomWindow.ScaleRange(plotMin, plotMin + plotRange, fullMin, fullMax, (plotTop + plotHeight - point.Y) / plotHeight, factor, out minY, out maxY);
+            zoomHistory.Push(new ZoomState { StartIndex = viewStartIndex, EndIndex = viewEndIndex, HasManualYRange = hasManualYRange, MinY = viewMinY, MaxY = viewMaxY });
+            var minimum = Math.Min(2, count - 1);
+            viewStartIndex = Math.Max(0, Math.Min(count - 1 - minimum, (int)Math.Round(left)));
+            viewEndIndex = Math.Max(viewStartIndex + minimum, Math.Min(count - 1, (int)Math.Round(right)));
+            hasManualYRange = true; viewMinY = minY; viewMaxY = maxY;
+            RenderPlot(); return true;
+        }
+
+        internal void ResetZoom() { ResetZoomState(); RenderPlot(); }
+        private void PlotCanvas_OnMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (GetSampleCount() < 2 || !IsInPlotArea(e.GetPosition(PlotCanvas))) return;
+            ZoomAt(e.GetPosition(PlotCanvas), e.Delta); e.Handled = true;
+        }
+        private void PlotCanvas_OnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (GetSampleCount() < 2 || !IsInPlotArea(e.GetPosition(PlotCanvas))) return;
+            ZoomOutButton_OnClick(sender, e); e.Handled = true;
+        }
+        private void PlotCanvas_OnLostMouseCapture(object sender, MouseEventArgs e) { isDraggingZoom = false; SelectionRectangle.Visibility = Visibility.Collapsed; }
 
         private void ZoomOutButton_OnClick(object sender, RoutedEventArgs e)
         {

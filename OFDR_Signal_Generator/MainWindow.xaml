@@ -44,6 +44,11 @@
         </Style>
     </Window.Resources>
 
+    <TabControl x:Name="WorkspaceTabs" Margin="8">
+        <TabItem Header="전체 신호 / Mode hop">
+            <controls:ModeHopPreviewView DataContext="{Binding ModeHopPreview}" />
+        </TabItem>
+        <TabItem Header="기존 OFDR 분석">
     <Grid Margin="14">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="430" />
@@ -451,4 +456,6 @@
             </TabItem>
         </TabControl>
     </Grid>
+        </TabItem>
+    </TabControl>
 </Window>

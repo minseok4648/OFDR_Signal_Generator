@@ -26,80 +26,16 @@ namespace OFDR_Signal_Core.Processing
             if (reference == null || xPolarization == null || yPolarization == null) throw new ArgumentNullException("All three channels are required.");
             if (reference.Length < 4 || xPolarization.Length != reference.Length || yPolarization.Length != reference.Length) throw new ArgumentException("Channel lengths must match and contain at least four samples.");
             var n = reference.Length;
-            progress?.Report(new OperationProgress { Stage = "k-linearization", Detail = "Build CH1 analytic signal", Percent = 0.0 });
-            var mean = reference.Average();
-            var diagnostics = maximumPreviewPoints > 0
-                ? new KLinearizationDiagnostics
-                {
-                    AuxiliaryRaw = PreviewReducer.FromReal(reference, maximumPreviewPoints, "Sample index", "Voltage (V)"),
-                    AuxiliaryMeanRemoved = PreviewReducer.FromSelector(n, maximumPreviewPoints, index => reference[index] - mean, "Sample index", "Voltage (V)")
-                }
-                : null;
-            var analytic = new Complex[n];
-            for (var i = 0; i < n; i++) analytic[i] = new Complex(reference[i] - mean, 0.0);
-            fft.ForwardInPlace(analytic);
-            var half = n / 2;
-            for (var i = 1; i < n; i++)
-            {
-                if (i < half + (n % 2)) analytic[i] *= 2.0;
-                else if (i > half || (n % 2) != 0) analytic[i] = Complex.Zero;
-            }
-            fft.InverseInPlace(analytic);
-
-            if (diagnostics != null)
-            {
-                diagnostics.AnalyticMagnitude = PreviewReducer.FromMagnitude(analytic, maximumPreviewPoints, "Sample index", "Analytic magnitude");
-                diagnostics.WrappedPhase = PreviewReducer.FromSelector(n, maximumPreviewPoints, index => Math.Atan2(analytic[index].Imaginary, analytic[index].Real), "Sample index", "Phase (rad)");
-            }
-
-            var phase = new double[n];
-            var previousWrapped = Math.Atan2(analytic[0].Imaginary, analytic[0].Real);
-            phase[0] = previousWrapped;
-            var offset = 0.0;
-            for (var i = 1; i < n; i++)
-            {
-                if ((i & 0x1ffff) == 0) cancellationToken.ThrowIfCancellationRequested();
-                var wrapped = Math.Atan2(analytic[i].Imaginary, analytic[i].Real);
-                var delta = wrapped - previousWrapped;
-                if (delta > Math.PI) offset -= 2.0 * Math.PI;
-                else if (delta < -Math.PI) offset += 2.0 * Math.PI;
-                phase[i] = wrapped + offset;
-                previousWrapped = wrapped;
-            }
-            analytic = null;
-
-            var direction = phase[n - 1] >= phase[0] ? 1 : -1;
-            if (direction < 0) for (var i = 0; i < n; i++) phase[i] = -phase[i];
-            if (diagnostics != null)
-            {
-                diagnostics.UnwrappedPhase = PreviewReducer.FromReal(phase, maximumPreviewPoints, "Sample index", "Phase (rad)");
-                diagnostics.PhaseIncrement = PreviewReducer.FromSelector(n - 1, maximumPreviewPoints, index => phase[index + 1] - phase[index], "Sample index", "Delta phase (rad)");
-            }
-            var anchors = new int[n];
-            anchors[0] = 0;
-            var accepted = 1;
-            var nonmonotonic = 0;
-            var lastPhase = phase[0];
-            var positiveDeltas = new List<double>(Math.Min(n, 1048576));
-            var sampleStep = Math.Max(1, n / 1048576);
-            for (var i = 1; i < n; i++)
-            {
-                var delta = phase[i] - lastPhase;
-                if (delta > 0.0)
-                {
-                    anchors[accepted++] = i;
-                    lastPhase = phase[i];
-                    if (i % sampleStep == 0) positiveDeltas.Add(delta);
-                }
-                else nonmonotonic++;
-            }
-            var ratio = nonmonotonic / (double)(n - 1);
-            if (ratio > maximumNonmonotonicRatio)
-                throw new InvalidOperationException(string.Format(System.Globalization.CultureInfo.InvariantCulture, "CH1 phase QC failed: nonmonotonic ratio {0:G6} exceeds {1:G6}.", ratio, maximumNonmonotonicRatio));
-            if (accepted < 2 || phase[anchors[accepted - 1]] - phase[anchors[0]] < 2.0 * Math.PI) throw new InvalidOperationException("CH1 phase span is too small for k-linearization.");
-
-            positiveDeltas.Sort();
-            var medianDelta = positiveDeltas.Count == 0 ? 0.0 : positiveDeltas[positiveDeltas.Count / 2];
+            var extracted = AuxiliaryPhaseExtractor.Extract(fft, reference, maximumPreviewPoints, cancellationToken, progress);
+            var failure = extracted.Failure(maximumNonmonotonicRatio);
+            if (failure != null) throw new InvalidOperationException(failure);
+            var phase = extracted.Phase;
+            var anchors = extracted.Anchors;
+            var accepted = extracted.Metrics.AcceptedAnchorCount;
+            var diagnostics = extracted.Diagnostics;
+            var ratio = extracted.Metrics.NonmonotonicRatio;
+            var direction = extracted.Metrics.SweepDirection;
+            var medianDelta = extracted.Metrics.MedianPhaseIncrementRadians;
             var outputReference = new double[n];
             var outputX = new double[n];
             var outputY = new double[n];
