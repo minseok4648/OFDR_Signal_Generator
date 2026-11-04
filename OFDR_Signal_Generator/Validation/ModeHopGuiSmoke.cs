@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -26,6 +26,7 @@ namespace OFDR_Signal_Generator.Validation
     internal static class ModeHopGuiSmoke
     {
         private static readonly BindingTrace Trace = new BindingTrace();
+        internal static List<string> BindingErrors => Trace.Errors;
         public static void AttachBindingTrace()
         {
             PresentationTraceSources.DataBindingSource.Listeners.Add(Trace);
@@ -257,13 +258,13 @@ namespace OFDR_Signal_Generator.Validation
             var watch = Stopwatch.StartNew();
             while (vm.IsBusy) { if (watch.Elapsed.TotalSeconds > 30) throw new TimeoutException("GUI operation exceeded 30 seconds"); await Task.Delay(10); }
         }
-        private static Point InArea(Rect area, double x, double y) => new Point(area.Left + area.Width * x, area.Top + area.Height * y);
+        internal static Point InArea(Rect area, double x, double y) => new Point(area.Left + area.Width * x, area.Top + area.Height * y);
         private static async Task NavigationIdle(ModeHopPreviewViewModel vm, ModeHopPreviewView view)
         {
             var watch = Stopwatch.StartNew();
             while (vm.IsBusy || view.IsNavigating) { if (watch.Elapsed.TotalSeconds > 30) throw new TimeoutException("Graph navigation did not settle"); await Task.Delay(10); }
         }
-        private static async Task Settle(Window window) { window.UpdateLayout(); await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); }
+        internal static async Task Settle(Window window) { window.UpdateLayout(); await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); }
         private static Task<ExportEvidence> VerifyExport(AuxiliaryCsvExportResult result) => Task.Run(() =>
         {
             var evidence = new ExportEvidence { Bytes = new FileInfo(result.CsvPath).Length, CsvRemovedAfterVerification = true };
@@ -310,14 +311,14 @@ namespace OFDR_Signal_Generator.Validation
             [DataMember] public string Sha256 { get; set; }
             [DataMember] public bool CsvRemovedAfterVerification { get; set; }
         }
-        private static void Check(SmokeMetrics metrics, string name, bool condition) { metrics.Checks[name] = condition; if (!condition) throw new InvalidOperationException("GUI check failed: " + name); }
-        private static T Find<T>(DependencyObject parent, string id) where T : DependencyObject => Descendants(parent).OfType<T>().Single(item => AutomationProperties.GetAutomationId(item) == id);
-        private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+        internal static void Check(SmokeMetrics metrics, string name, bool condition) { metrics.Checks[name] = condition; if (!condition) throw new InvalidOperationException("GUI check failed: " + name); }
+        internal static T Find<T>(DependencyObject parent, string id) where T : DependencyObject => Descendants(parent).OfType<T>().Single(item => AutomationProperties.GetAutomationId(item) == id);
+        internal static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
         {
             yield return parent;
             for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++) foreach (var child in Descendants(VisualTreeHelper.GetChild(parent, i))) yield return child;
         }
-        private static void Snapshot(Window window, string directory, string name)
+        internal static void Snapshot(Window window, string directory, string name)
         {
             window.UpdateLayout();
             var bitmap = new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth), (int)Math.Ceiling(window.ActualHeight), 96, 96, PixelFormats.Pbgra32);

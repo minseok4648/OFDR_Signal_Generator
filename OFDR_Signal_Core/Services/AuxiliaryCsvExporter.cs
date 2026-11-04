@@ -86,17 +86,17 @@ namespace OFDR_Signal_Core.Services
                 if (cleanupBackups) { DeleteTemporary(backupCsv); DeleteTemporary(backupMetadata); }
             }
         }
-        private static void Publish(string partial, string destination, string backup, bool overwrite)
+        internal static void Publish(string partial, string destination, string backup, bool overwrite)
         {
             if (File.Exists(destination) && overwrite) File.Replace(partial, destination, backup);
             else File.Move(partial, destination);
         }
-        private static void Restore(string destination, string backup)
+        internal static void Restore(string destination, string backup)
         {
             if (File.Exists(backup)) File.Replace(backup, destination, null);
             else File.Delete(destination);
         }
-        private static void DeleteTemporary(string path)
+        internal static void DeleteTemporary(string path)
         {
             try { if (File.Exists(path)) File.Delete(path); }
             catch (IOException) { }

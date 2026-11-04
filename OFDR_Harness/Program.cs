@@ -33,6 +33,7 @@ namespace OFDR_Harness
                     case "run-pair": return RunPair(options);
                     case "preview-mode-hop": return ModeHopPreviewCommand.Run(options);
                     case "inspect-mode-hop": options["inspect"] = "true"; return ModeHopPreviewCommand.Run(options);
+                    case "validate-four-channel-samples": return FourChannelSampleValidation.Run(options);
                     case "evaluate": return Run(options, true);
                     default: Console.Error.WriteLine("Unknown command: " + command); return 2;
                 }
@@ -298,7 +299,7 @@ namespace OFDR_Harness
                 builder.AppendLine("- Selected spectral shift: " + result.SelectedSegment.PeakSpectralShiftGHz.ToString("G9", CultureInfo.InvariantCulture) + " GHz");
                 builder.AppendLine("- Selected segment center: " + result.SelectedSegment.SegmentCenterDistanceMeters.ToString("G9", CultureInfo.InvariantCulture) + " m");
                 builder.AppendLine("- Selected peak strain: " + result.SelectedSegment.PeakStrainMicrostrain.ToString("G9", CultureInfo.InvariantCulture) + " microstrain");
-                builder.AppendLine("- Expected applied strain from stage displacement: " + result.PhysicalAxis.ExpectedAppliedStrainMicrostrain.ToString("G9", CultureInfo.InvariantCulture) + " microstrain");
+                builder.AppendLine("- Expected applied strain from stage displacement: " + (result.PhysicalAxis.ExpectedAppliedStrainMicrostrain?.ToString("G9", CultureInfo.InvariantCulture) ?? "unspecified") + " microstrain");
                 builder.AppendLine("- Distance scale: " + result.PhysicalAxis.DistanceMetersPerFftBin.ToString("G9", CultureInfo.InvariantCulture) + " m/FFT bin");
                 builder.AppendLine("- Strain scale: " + result.PhysicalAxis.StrainMicrostrainPerLag.ToString("G9", CultureInfo.InvariantCulture) + " microstrain/lag bin");
                 builder.AppendLine("- Spectral shift scale: " + result.PhysicalAxis.SpectralShiftGHzPerLag.ToString("G9", CultureInfo.InvariantCulture) + " GHz/lag bin");

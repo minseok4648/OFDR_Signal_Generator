@@ -36,10 +36,20 @@ namespace OFDR_Signal_Core.Processing
                 StartSeconds = startSeconds, EndSeconds = endSeconds, ThresholdVoltage = settings.ThresholdVoltage,
                 Auxiliary = Reduce(recording.Auxiliary, first, end, recording.SampleIntervalSeconds, settings.MaximumPreviewPoints, token),
                 Trigger = Reduce(recording.Trigger, first, end, recording.SampleIntervalSeconds, settings.MaximumPreviewPoints, token),
+                SweepTrigger = recording.HasFourChannels ? Reduce(recording.SweepTrigger, first, end, recording.SampleIntervalSeconds, settings.MaximumPreviewPoints, token) : null,
+                Measurement = recording.HasFourChannels ? Reduce(recording.Measurement, first, end, recording.SampleIntervalSeconds, settings.MaximumPreviewPoints, token) : null,
                 Ranges = analysis.Ranges.Where(range => range.EndSeconds > startSeconds && range.StartSeconds < endSeconds).ToList(),
                 SweepBoundaries = new List<SweepBoundary>()
             };
-            if (settings.SweepDurationSeconds.HasValue)
+            if (recording.HasFourChannels)
+            {
+                var sweeps = new SweepPreparationEngine().DetectSweeps(recording, token);
+                foreach (var sweep in sweeps)
+                    if (sweep.StartSeconds >= startSeconds && sweep.StartSeconds <= endSeconds) result.SweepBoundaries.Add(new SweepBoundary { Number = sweep.Number, Seconds = sweep.StartSeconds });
+                if (sweeps.Count > 0 && sweeps[sweeps.Count - 1].EndSeconds >= startSeconds && sweeps[sweeps.Count - 1].EndSeconds <= endSeconds)
+                    result.SweepBoundaries.Add(new SweepBoundary { Number = sweeps.Count + 1, Seconds = sweeps[sweeps.Count - 1].EndSeconds });
+            }
+            else if (settings.SweepDurationSeconds.HasValue)
             {
                 var period = settings.SweepDurationSeconds.Value;
                 if (period < recording.SampleIntervalSeconds) throw new ArgumentException("스윕 시간이 샘플 간격보다 짧습니다.");
@@ -59,7 +69,7 @@ namespace OFDR_Signal_Core.Processing
             ranges.Add(new ModeHopRange { Number = ranges.Count + 1, StartIndex = start, EndIndexExclusive = end, StartSeconds = start * dt, EndSeconds = end * dt });
         }
 
-        private static TimedPreview Reduce(double[] source, int first, int end, double dt, int maximum, CancellationToken token)
+        public static TimedPreview Reduce(double[] source, int first, int end, double dt, int maximum, CancellationToken token)
         {
             var indices = new List<int>(maximum);
             var length = end - first;

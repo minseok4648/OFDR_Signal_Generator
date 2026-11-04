@@ -13,6 +13,12 @@ namespace OFDR_Signal_Core.Models
         public double SourceStartSeconds { get; internal set; }
         public double SampleIntervalSeconds { get; internal set; }
         public double[] Trigger { get; internal set; }
+        public double[] SweepTrigger { get; internal set; }
+        public double[] Measurement { get; internal set; }
+        public int FirstSampleIndex { get; internal set; }
+        public bool IsPartialRead { get; internal set; }
+        public bool HasFourChannels => SweepTrigger != null && Measurement != null;
+        internal List<SweepRange> CompleteSweeps { get; set; }
         public double[] Auxiliary { get; internal set; }
         public int SampleCount => Trigger.Length;
         public double DurationSeconds => SampleCount * SampleIntervalSeconds;
@@ -83,6 +89,8 @@ namespace OFDR_Signal_Core.Models
         [DataMember] public double EndSeconds { get; set; }
         [DataMember] public TimedPreview Auxiliary { get; set; }
         [DataMember] public TimedPreview Trigger { get; set; }
+        [DataMember] public TimedPreview SweepTrigger { get; set; }
+        [DataMember] public TimedPreview Measurement { get; set; }
         [DataMember] public List<ModeHopRange> Ranges { get; set; }
         [DataMember] public List<SweepBoundary> SweepBoundaries { get; set; }
         [DataMember] public bool SweepMarkersDecimated { get; set; }

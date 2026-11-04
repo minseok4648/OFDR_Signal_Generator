@@ -15,6 +15,7 @@ namespace OFDR_Signal_Core.Models
         public int ChannelNumber { get; set; }
         public double SampleIntervalSeconds { get; set; }
         public double[] Values { get; set; }
+        public PreparedSweepMetadata Preparation { get; set; }
     }
 
     public sealed class IndependentOfdrInput
@@ -98,7 +99,7 @@ namespace OFDR_Signal_Core.Models
         [DataMember(Order = 2)] public double DistanceMetersPerFftBin { get; set; }
         [DataMember(Order = 3)] public double LocalSpectrumDeltaKRadPerMeter { get; set; }
         [DataMember(Order = 4)] public double StrainMicrostrainPerLag { get; set; }
-        [DataMember(Order = 5)] public double ExpectedAppliedStrainMicrostrain { get; set; }
+        [DataMember(Order = 5)] public double? ExpectedAppliedStrainMicrostrain { get; set; }
         [DataMember(Order = 6)] public double LocalSpectrumLength { get; set; }
         [DataMember(Order = 7)] public string Note { get; set; }
         [DataMember(Order = 8)] public double SpectralShiftGHzPerLag { get; set; }

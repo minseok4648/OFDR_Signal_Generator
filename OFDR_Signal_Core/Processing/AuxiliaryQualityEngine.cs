@@ -29,12 +29,12 @@ namespace OFDR_Signal_Core.Processing
         private static void CopyKept(ModeHopRecording source, int first, int end, double[] values, int[] indices, List<int> joins, ref int output, CancellationToken token)
         {
             if (end <= first) return;
-            if (output > 0 && indices[output - 1] + 1 != first) joins.Add(output);
+            if (output > 0 && indices[output - 1] + 1 != source.FirstSampleIndex + first) joins.Add(output);
             for (var i = first; i < end; i++)
             {
                 if ((i & 0x3fff) == 0) token.ThrowIfCancellationRequested();
                 if (output >= values.Length) throw new ArgumentException("제외 샘플 수가 올바르지 않습니다.");
-                values[output] = source.Auxiliary[i]; indices[output++] = i;
+                values[output] = source.Auxiliary[i]; indices[output++] = source.FirstSampleIndex + i;
             }
         }
 

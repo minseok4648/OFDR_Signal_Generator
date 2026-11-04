@@ -29,6 +29,14 @@ namespace OFDR_Signal_Core.Processing
         {
             if (input == null || input.Auxiliary == null || input.SignalAuxiliary == null || input.Reference == null || input.Signal == null)
                 throw new ArgumentNullException(nameof(input), "기준 CH1, 측정 CH1, Ref, Sig 입력이 모두 필요합니다.");
+            if (new[] { input.Auxiliary, input.SignalAuxiliary, input.Reference, input.Signal }.Any(c => c.Preparation != null))
+            {
+                ValidatePreparedPair(input.Auxiliary, input.Reference, "Ref");
+                ValidatePreparedPair(input.SignalAuxiliary, input.Signal, "Signal");
+                var dt = input.Auxiliary.SampleIntervalSeconds;
+                if (Math.Abs(input.SignalAuxiliary.SampleIntervalSeconds - dt) > Math.Max(1e-15, dt * 1e-9)) throw new InvalidOperationException("Ref/Signal 샘플 간격이 다릅니다.");
+                return;
+            }
             if (input.Auxiliary.ChannelNumber != 1 || input.SignalAuxiliary.ChannelNumber != 1)
                 throw new InvalidOperationException("기준/측정 보조간섭계 입력은 CH1이어야 합니다.");
             if (Math.Abs(input.Auxiliary.DisplacementMm) > 1e-12) throw new InvalidOperationException("기준 보조간섭계 입력은 0.0 mm 데이터여야 합니다.");
@@ -44,7 +52,7 @@ namespace OFDR_Signal_Core.Processing
                 throw new InvalidOperationException("측정 보조간섭계와 Sig의 반복 번호가 같아야 합니다.");
             var count = input.Auxiliary.Values == null ? 0 : input.Auxiliary.Values.Length;
             if (count < 4 || input.SignalAuxiliary.Values == null || input.Reference.Values == null || input.Signal.Values == null
-                || input.SignalAuxiliary.Values.Length != count || input.Reference.Values.Length != count || input.Signal.Values.Length != count)
+                || input.SignalAuxiliary.Values.Length < 4 || input.Reference.Values.Length != count || input.Signal.Values.Length != input.SignalAuxiliary.Values.Length)
                 throw new InvalidOperationException("기준 CH1, 측정 CH1, Ref, Sig의 포인트 수가 같아야 합니다.");
             var tolerance = Math.Max(1e-15, Math.Abs(input.Auxiliary.SampleIntervalSeconds) * 1e-9);
             if (Math.Abs(input.SignalAuxiliary.SampleIntervalSeconds - input.Auxiliary.SampleIntervalSeconds) > tolerance
@@ -58,7 +66,9 @@ namespace OFDR_Signal_Core.Processing
             ValidateInput(input);
             config = config ?? new IndependentOfdrProcessingConfig();
             ValidateConfig(config);
-            if (config.SegmentSize > input.Auxiliary.Values.Length / 2) throw new ArgumentOutOfRangeException(nameof(config.SegmentSize), "Segment 크기는 양의 거리 FFT 구간보다 작아야 합니다.");
+            var qcBlock = PreparedSweepQcPolicy.InputBlockReason(input, config.MaxAuxNonmonotonicRatio);
+            if (qcBlock != null) throw new InvalidOperationException("분석 전 위상 QC 차단:\n" + qcBlock);
+            if (config.SegmentSize > Math.Min(input.Auxiliary.Values.Length, input.SignalAuxiliary.Values.Length) / 2) throw new ArgumentOutOfRangeException(nameof(config.SegmentSize), "Segment 크기는 양의 거리 FFT 구간보다 작아야 합니다.");
 
             var total = Stopwatch.StartNew();
             var performance = new List<NamedMetric>();
@@ -152,7 +162,10 @@ namespace OFDR_Signal_Core.Processing
             performance.Add(Metric("strain_microstrain_per_lag", physical.StrainMicrostrainPerLag, "microstrain/bin"));
             performance.Add(Metric("spectral_shift_ghz_per_lag", physical.SpectralShiftGHzPerLag, "GHz/bin"));
             performance.Add(Metric("maximum_correlation_search_lag", maximumLag, "bin"));
-            performance.Add(Metric("expected_applied_strain_microstrain", physical.ExpectedAppliedStrainMicrostrain, "microstrain"));
+            if (physical.ExpectedAppliedStrainMicrostrain.HasValue) performance.Add(Metric("expected_applied_strain_microstrain", physical.ExpectedAppliedStrainMicrostrain.Value, "microstrain"));
+            performance.Add(Metric("reference_input_samples", input.Reference.Values.Length, "count"));
+            performance.Add(Metric("signal_input_samples", input.Signal.Values.Length, "count"));
+            performance.Add(Metric("common_grid_samples", referenceSpectrum.Length, "count"));
 
             var referenceSpectrumPreview = BuildSpectrumDbPreview(referenceSpectrum, positiveSpectrumLength, config.MaxPreviewPoints,
                 config.FftDbFloor, config.UsePhysicalAxes ? "거리 (m)" : "FFT bin");
@@ -182,8 +195,8 @@ namespace OFDR_Signal_Core.Processing
                 SignalAuxiliaryId = input.SignalAuxiliary.MeasurementId,
                 ReferenceId = input.Reference.MeasurementId,
                 SignalId = input.Signal.MeasurementId,
-                Polarization = input.Signal.ChannelNumber == 2 ? "Xpol (CH2)" : "Ypol (CH3)",
-                SampleCount = input.Signal.Values.Length,
+                Polarization = input.Signal.Preparation != null ? "CH4 측정 신호 (편광 미지정)" : input.Signal.ChannelNumber == 2 ? "Xpol (CH2)" : "Ypol (CH3)",
+                SampleCount = referenceSpectrum.Length,
                 KLinearization = detailed.ReferenceMetrics,
                 KDiagnostics = detailed.ReferenceDiagnostics,
                 SignalKLinearization = detailed.SignalMetrics,
@@ -446,7 +459,8 @@ namespace OFDR_Signal_Core.Processing
             var localDeltaK = 2.0 * Math.PI * spectralShiftHzPerLag / speedOfLight;
             var centerFrequencyHz = speedOfLight / (config.CenterWavelengthNm * 1e-9);
             var strainPerLag = spectralShiftHzPerLag / (centerFrequencyHz * config.StrainCoefficient) * 1e6 * config.StrainScaleFactor;
-            var expected = input.Signal.DisplacementMm * 1000.0 / config.DeformationLengthMeters;
+            double? displacement = input.Signal.Preparation == null ? input.Signal.DisplacementMm : input.Signal.Preparation.KnownDisplacementMm;
+            var expected = displacement * 1000.0 / config.DeformationLengthMeters;
             return new PhysicalAxisCalibrationResult
             {
                 Enabled = config.UsePhysicalAxes,
@@ -460,6 +474,17 @@ namespace OFDR_Signal_Core.Processing
                 LocalSpectrumLength = localLength,
                 Note = "18.2703 m는 보조간섭계의 물리 경로차로 사용하고 spectral 축에는 group index를 적용합니다. 거리식은 같은 광섬유의 굴절률이 상쇄되는 구성을 가정합니다. 장비 기하, 중심 파장과 strain 계수는 확인해야 합니다."
             };
+        }
+
+        private static void ValidatePreparedPair(OfdrChannelData auxiliary, OfdrChannelData measurement, string role)
+        {
+            var a = auxiliary.Preparation; var m = measurement.Preparation;
+            if (a == null || m == null || a.Role != role || m.Role != role || !ReferenceEquals(a, m)
+                || auxiliary.ChannelNumber != 3 || measurement.ChannelNumber != 4 || a.AuxiliaryChannel != 3 || a.MeasurementChannel != 4
+                || auxiliary.Values == null || measurement.Values == null || auxiliary.Values.Length < 4 || auxiliary.Values.Length != measurement.Values.Length
+                || auxiliary.Values.Length != a.RowCount || !ModeHopSettings.IsFinite(a.SampleIntervalSeconds) || a.SampleIntervalSeconds <= 0
+                || auxiliary.SampleIntervalSeconds != a.SampleIntervalSeconds || measurement.SampleIntervalSeconds != a.SampleIntervalSeconds)
+                throw new InvalidOperationException(role + "의 동시 취득 CH3/CH4 스윕 대응을 확인하세요.");
         }
 
         private static PeakEstimate FindPeak(Complex[] values, int maximumLag)

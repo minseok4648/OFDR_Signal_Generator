@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -28,7 +28,7 @@ namespace OFDR_Signal_Core.Processing
             var n = reference.Length;
             var extracted = AuxiliaryPhaseExtractor.Extract(fft, reference, maximumPreviewPoints, cancellationToken, progress);
             var failure = extracted.Failure(maximumNonmonotonicRatio);
-            if (failure != null) throw new InvalidOperationException(failure);
+            if (failure != null) throw new InvalidOperationException(failure.Replace("CH1", "Auxiliary"));
             var phase = extracted.Phase;
             var anchors = extracted.Anchors;
             var accepted = extracted.Metrics.AcceptedAnchorCount;
@@ -94,10 +94,10 @@ namespace OFDR_Signal_Core.Processing
             IProgress<OperationProgress> progress = null)
         {
             if (referenceAuxiliary == null || referenceSignal == null || signalAuxiliary == null || signal == null)
-                throw new ArgumentNullException("기준/측정 sweep의 CH1과 편광 신호가 모두 필요합니다.");
+                throw new ArgumentNullException("기준/측정 sweep의 보조간섭계와 측정 신호가 모두 필요합니다.");
             if (referenceAuxiliary.Length != referenceSignal.Length || signalAuxiliary.Length != signal.Length
-                || referenceSignal.Length != signal.Length || referenceSignal.Length < 4)
-                throw new ArgumentException("기준/측정 sweep의 채널 길이는 모두 같아야 합니다.");
+                || referenceSignal.Length < 4 || signal.Length < 4)
+                throw new ArgumentException("각 sweep 내부의 보조간섭계와 측정 신호 길이가 같고 최소 4개여야 합니다.");
 
             var referenceDetailed = LinearizeDetailed(
                 referenceAuxiliary,
@@ -106,7 +106,7 @@ namespace OFDR_Signal_Core.Processing
                 maximumNonmonotonicRatio,
                 maximumPreviewPoints,
                 cancellationToken,
-                ScaleProgress(progress, "기준 sweep CH1", 0.0, 50.0));
+                ScaleProgress(progress, "기준 sweep 보조간섭계", 0.0, 50.0));
             var referenceValues = referenceDetailed.Linearized.XPolarization;
             referenceDetailed.Linearized.Reference = null;
             referenceDetailed.Linearized.YPolarization = null;
@@ -118,7 +118,7 @@ namespace OFDR_Signal_Core.Processing
                 maximumNonmonotonicRatio,
                 maximumPreviewPoints,
                 cancellationToken,
-                ScaleProgress(progress, "측정 sweep CH1", 50.0, 100.0));
+                ScaleProgress(progress, "측정 sweep 보조간섭계", 50.0, 100.0));
             var signalValues = signalDetailed.Linearized.XPolarization;
             signalDetailed.Linearized.Reference = null;
             signalDetailed.Linearized.YPolarization = null;
@@ -126,8 +126,9 @@ namespace OFDR_Signal_Core.Processing
             var referenceSpan = referenceDetailed.Linearized.Metrics.PhaseSpanRadians;
             var signalSpan = signalDetailed.Linearized.Metrics.PhaseSpanRadians;
             var commonSpan = Math.Min(referenceSpan, signalSpan);
-            referenceValues = ResampleUniformSpan(referenceValues, referenceSpan, commonSpan, cancellationToken);
-            signalValues = ResampleUniformSpan(signalValues, signalSpan, commonSpan, cancellationToken);
+            var commonCount = Math.Min(referenceValues.Length, signalValues.Length);
+            referenceValues = ResampleUniformSpan(referenceValues, referenceSpan, commonSpan, commonCount, cancellationToken);
+            signalValues = ResampleUniformSpan(signalValues, signalSpan, commonSpan, commonCount, cancellationToken);
             SetUniformGrid(referenceDetailed.Diagnostics, commonSpan, referenceValues.Length, maximumPreviewPoints);
             SetUniformGrid(signalDetailed.Diagnostics, commonSpan, signalValues.Length, maximumPreviewPoints);
 
@@ -144,10 +145,10 @@ namespace OFDR_Signal_Core.Processing
             };
         }
 
-        private static double[] ResampleUniformSpan(double[] values, double sourceSpan, double targetSpan, CancellationToken token)
+        private static double[] ResampleUniformSpan(double[] values, double sourceSpan, double targetSpan, int count, CancellationToken token)
         {
-            if (Math.Abs(sourceSpan - targetSpan) <= Math.Max(1e-12, sourceSpan * 1e-12)) return values;
-            var output = new double[values.Length];
+            if (count == values.Length && Math.Abs(sourceSpan - targetSpan) <= Math.Max(1e-12, sourceSpan * 1e-12)) return values;
+            var output = new double[count];
             var maximumSourceIndex = values.Length - 1.0;
             for (var i = 0; i < output.Length; i++)
             {

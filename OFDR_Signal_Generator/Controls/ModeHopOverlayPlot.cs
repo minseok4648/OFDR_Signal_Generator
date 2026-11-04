@@ -55,6 +55,7 @@ namespace OFDR_Signal_Generator.Controls
             {
                 plot.auxiliaryMin = data.Auxiliary.Values.Min(); plot.auxiliaryMax = data.Auxiliary.Values.Max();
                 plot.triggerMin = Math.Min(data.Trigger.Values.Min(), data.ThresholdVoltage); plot.triggerMax = Math.Max(data.Trigger.Values.Max(), data.ThresholdVoltage);
+                if (data.SweepTrigger != null) { plot.triggerMin = Math.Min(plot.triggerMin, data.SweepTrigger.Values.Min()); plot.triggerMax = Math.Max(plot.triggerMax, data.SweepTrigger.Values.Max()); }
                 Pad(ref plot.auxiliaryMin, ref plot.auxiliaryMax); Pad(ref plot.triggerMin, ref plot.triggerMax);
             }
         }
@@ -96,6 +97,7 @@ namespace OFDR_Signal_Generator.Controls
             }
             Trace(dc, v.Auxiliary, auxMin, auxMax, AuxiliaryBrush);
             Trace(dc, v.Trigger, trMin, trMax, TriggerBrush);
+            if (v.SweepTrigger != null) { Trace(dc, v.SweepTrigger, trMin, trMax, Brushes.LightGreen); Text(dc, "CH1 시작 트리거 (초록)", area.Left + 5, area.Top + 23, Brushes.LightGreen); }
             if (dragStart.HasValue)
             {
                 var left = Math.Max(area.Left, Math.Min(dragStart.Value.X, mouse.X));

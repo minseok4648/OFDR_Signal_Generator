@@ -23,6 +23,20 @@ namespace OFDR_Signal_Generator.ViewModels
         private readonly OfdrChannelCsvConverter channelConverter = new OfdrChannelCsvConverter();
         private CancellationTokenSource cancellation;
         private IndependentOfdrProcessingEngine engine;
+        private IndependentOfdrInput preparedInput;
+        private string[] legacyPaths;
+        private string legacyPolarization;
+        private TaskCompletionSource<bool> operationIdle;
+        private int workspaceSelectedTab;
+        public bool IsLegacyInput => preparedInput == null;
+        public string ProcessingQcBlockReason => preparedInput == null ? null : PreparedSweepQcPolicy.InputBlockReason(preparedInput, MaxNonmonotonicRatio);
+        public bool IsProcessingQcBlocked => ProcessingQcBlockReason != null;
+        public string ProcessingReadiness => preparedInput == null ? "" : IsProcessingQcBlocked ? "전체 처리 시작 차단\n" + ProcessingQcBlockReason + "\n해당 역할의 구간을 조정하고 다시 진단하세요."
+            : "확정된 Ref/Signal CH3 진단이 현재 분석 한계를 통과했습니다.";
+        public string ReferenceAuxiliaryLabel => IsLegacyInput ? "기준 sweep 보조간섭계 · Ref와 동시 취득한 CH1" : "기준 sweep 보조간섭계 · 선택 Ref의 CH3";
+        public string SignalAuxiliaryLabel => IsLegacyInput ? "측정 sweep 보조간섭계 · Sig와 동시 취득한 CH1" : "측정 sweep 보조간섭계 · 선택 Signal의 CH3";
+        public int WorkspaceSelectedTab { get => workspaceSelectedTab; set => SetProperty(ref workspaceSelectedTab, value); }
+        public RelayCommand UseLegacyInputsCommand { get; }
         private IndependentOfdrProcessingResult processingResult;
         private SegmentCorrelationView selectedSegment;
         private string auxiliaryPath;
@@ -81,7 +95,12 @@ namespace OFDR_Signal_Generator.ViewModels
             ConvertSignalAuxiliaryCommand = new RelayCommand(() => ConvertInputAsync(InputRole.SignalAuxiliary), () => CanConvert(SignalAuxiliaryPath));
             ConvertReferenceCommand = new RelayCommand(() => ConvertInputAsync(InputRole.Reference), () => CanConvert(ReferencePath));
             ConvertSignalCommand = new RelayCommand(() => ConvertInputAsync(InputRole.Signal), () => CanConvert(SignalPath));
-            RunProcessingCommand = new RelayCommand(() => RunProcessingAsync(), () => !IsBusy && InputsSelected());
+            RunProcessingCommand = new RelayCommand(() => { _ = RunProcessingAsync(); }, () => !IsBusy && !ModeHopPreview.IsBusy && InputsSelected() && !IsProcessingQcBlocked);
+            UseLegacyInputsCommand = new RelayCommand(ClearPreparedInput, () => !IsBusy);
+            ModeHopPreview.SweepPreparation.WorkspaceIdle = () => !IsBusy;
+            ModeHopPreview.SweepPreparation.ProcessingLimit = () => MaxNonmonotonicRatio;
+            ModeHopPreview.SweepPreparation.ApplyRequested += ApplyPreparedSweeps;
+            ModeHopPreview.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(ModeHopPreview.IsBusy)) RunProcessingCommand.RaiseCanExecuteChanged(); };
             CancelCommand = new RelayCommand(Cancel, () => IsBusy);
             InspectSegmentCommand = new RelayCommand(InspectSegment, () => !IsBusy && ProcessingResult != null);
         }
@@ -98,7 +117,7 @@ namespace OFDR_Signal_Generator.ViewModels
         public RelayCommand RunProcessingCommand { get; private set; }
         public RelayCommand CancelCommand { get; private set; }
         public RelayCommand InspectSegmentCommand { get; private set; }
-        public IReadOnlyList<string> PolarizationOptions { get; } = new[] { "CH2 / Xpol", "CH3 / Ypol" };
+        public IReadOnlyList<string> PolarizationOptions => IsLegacyInput ? new[] { "CH2 / Xpol", "CH3 / Ypol" } : new[] { "CH4 / 편광 미지정" };
         public IReadOnlyList<string> WindowFunctions { get; } = IndependentOfdrProcessingEngine.SupportedWindows;
         public IReadOnlyList<string> LargeGraphOptions { get; } = new[]
         {
@@ -126,7 +145,7 @@ namespace OFDR_Signal_Generator.ViewModels
         public int ZeroPadFactor { get { return zeroPadFactor; } set { SetProperty(ref zeroPadFactor, value); } }
         public double CorrelationScale { get { return correlationScale; } set { SetProperty(ref correlationScale, value); } }
         public bool NormalizeCorrelation { get { return normalizeCorrelation; } set { SetProperty(ref normalizeCorrelation, value); } }
-        public double MaxNonmonotonicRatio { get { return maxNonmonotonicRatio; } set { SetProperty(ref maxNonmonotonicRatio, value); } }
+        public double MaxNonmonotonicRatio { get { return maxNonmonotonicRatio; } set { if (SetProperty(ref maxNonmonotonicRatio, value)) RefreshPreparedQc(); } }
         public int MaxPreviewPoints { get { return maxPreviewPoints; } set { SetProperty(ref maxPreviewPoints, value); } }
         public bool UsePhysicalAxes { get { return usePhysicalAxes; } set { SetProperty(ref usePhysicalAxes, value); } }
         public double AuxiliaryPathDifferenceMeters { get { return auxiliaryPathDifferenceMeters; } set { SetProperty(ref auxiliaryPathDifferenceMeters, value); } }
@@ -183,7 +202,7 @@ namespace OFDR_Signal_Generator.ViewModels
                 var value = ProcessingResult.PhysicalAxis;
                 return string.Format(CultureInfo.InvariantCulture,
                     "거리 간격 {0:G9} m/FFT bin · Spectral shift {1:G9} GHz/lag · Strain {2:G9} με/lag · sweep {3:F3} GHz · 인가 변형 기준 {4:F3} με",
-                    value.DistanceMetersPerFftBin, value.SpectralShiftGHzPerLag, value.StrainMicrostrainPerLag, value.SweepSpanGHz, value.ExpectedAppliedStrainMicrostrain);
+                    value.DistanceMetersPerFftBin, value.SpectralShiftGHzPerLag, value.StrainMicrostrainPerLag, value.SweepSpanGHz, value.ExpectedAppliedStrainMicrostrain.HasValue ? value.ExpectedAppliedStrainMicrostrain.Value.ToString("F3", CultureInfo.InvariantCulture) : "미지정");
             }
         }
 
@@ -204,8 +223,59 @@ namespace OFDR_Signal_Generator.ViewModels
         public string LargeGraphXAxisTitle { get { var series = GetLargeGraphPrimary(); return series == null ? "X" : series.XAxisTitle; } }
         public string LargeGraphYAxisTitle { get { var series = GetLargeGraphPrimary(); return series == null ? "Y" : series.YAxisTitle; } }
 
-        private async void RunProcessingAsync()
+        public void ApplyPreparedSweeps(PreparedSweepData reference, PreparedSweepData signal)
         {
+            if (IsBusy) return;
+            var block = PreparedSweepQcPolicy.PairBlockReason(reference?.Metadata, signal?.Metadata, MaxNonmonotonicRatio);
+            if (block != null) { ReportQcBlock("apply_input", reference?.Metadata, signal?.Metadata, block); return; }
+            var input = PreparedSweepData.ToInput(reference, signal);
+            IndependentOfdrProcessingEngine.ValidateInput(input);
+            if (preparedInput == null) { legacyPaths = new[] { AuxiliaryPath, SignalAuxiliaryPath, ReferencePath, SignalPath }; legacyPolarization = SelectedPolarization; }
+            preparedInput = input;
+            OnPropertyChanged(nameof(PolarizationOptions)); SelectedPolarization = "CH4 / 편광 미지정";
+            AuxiliaryPath = ReferencePath = reference.Metadata.SourcePath;
+            SignalAuxiliaryPath = SignalPath = signal.Metadata.SourcePath;
+            SamplingRateSamplesPerSecond = 1.0 / reference.Metadata.SampleIntervalSeconds;
+            OnPropertyChanged(nameof(SamplingRateMsps));
+            InputValidationText = string.Format(CultureInfo.InvariantCulture, "생성 입력: Ref S{0} ({1:N0}) / Signal S{2} ({3:N0}) · CH3 보조간섭계 / CH4 측정 · 편광·변형량 미지정. QC: {4} / {5}", reference.Metadata.Sweep.Number, reference.SampleCount, signal.Metadata.Sweep.Number, signal.SampleCount, reference.Metadata.Diagnosis?.Decision, signal.Metadata.Diagnosis?.Decision);
+            ProcessingResult?.Dispose(); ProcessingResult = null; SelectedSegment = null;
+            OnPropertyChanged(nameof(IsLegacyInput)); RaiseCommandStates(); WorkspaceSelectedTab = 1;
+            OnPropertyChanged(nameof(ReferenceAuxiliaryLabel)); OnPropertyChanged(nameof(SignalAuxiliaryLabel));
+            RefreshPreparedQc();
+        }
+
+        private void RefreshPreparedQc()
+        {
+            OnPropertyChanged(nameof(ProcessingQcBlockReason)); OnPropertyChanged(nameof(IsProcessingQcBlocked)); OnPropertyChanged(nameof(ProcessingReadiness));
+            RunProcessingCommand?.RaiseCanExecuteChanged(); ModeHopPreview.SweepPreparation.RefreshCommands();
+        }
+
+        private void ReportQcBlock(string stage, PreparedSweepMetadata reference, PreparedSweepMetadata signal, string reason)
+        {
+            InputValidationText = "분석 시작 차단\n" + reason;
+            ProgressText = "위상 QC를 통과하지 못해 처리를 시작하지 않았습니다.\n" + reason;
+            try { SweepRunRecorder.RecordQcBlock(stage, reference, signal, MaxNonmonotonicRatio, reason); }
+            catch (Exception ex) { ProgressText += "\n결과 기록 실패: " + ex.Message; }
+            RefreshPreparedQc();
+        }
+
+        private void ClearPreparedInput()
+        {
+            if (IsBusy || preparedInput == null) return;
+            preparedInput = null;
+            OnPropertyChanged(nameof(PolarizationOptions)); SelectedPolarization = legacyPolarization ?? "CH2 / Xpol";
+            if (legacyPaths != null) { AuxiliaryPath = legacyPaths[0]; SignalAuxiliaryPath = legacyPaths[1]; ReferencePath = legacyPaths[2]; SignalPath = legacyPaths[3]; }
+            OnPropertyChanged(nameof(IsLegacyInput)); RaiseCommandStates(); InputValidationText = "기존 CH1 보조간섭계 / CH2·CH3 편광 파일 입력 모드입니다.";
+            OnPropertyChanged(nameof(ReferenceAuxiliaryLabel)); OnPropertyChanged(nameof(SignalAuxiliaryLabel));
+            RefreshPreparedQc();
+        }
+
+        public async Task RunProcessingAsync()
+        {
+            if (IsBusy || ModeHopPreview.IsBusy || !InputsSelected()) return;
+            var qcBlock = ProcessingQcBlockReason;
+            if (qcBlock != null) { ReportQcBlock("run_command", preparedInput.Reference.Preparation, preparedInput.Signal.Preparation, qcBlock); return; }
+            SweepRunRecorder preparedLog = null; Exception preparedFailure = null;
             BeginOperation("입력 파일을 순서대로 읽는 중...");
             try
             {
@@ -214,7 +284,8 @@ namespace OFDR_Signal_Generator.ViewModels
                 var signalAuxiliaryProgress = new Progress<OperationProgress>(value => UpdateProgress(value, 7.5, 15.0));
                 var referenceProgress = new Progress<OperationProgress>(value => UpdateProgress(value, 15.0, 22.5));
                 var signalProgress = new Progress<OperationProgress>(value => UpdateProgress(value, 22.5, 30.0));
-                var input = await Task.Run(() => new IndependentOfdrInput
+                if (preparedInput != null) preparedLog = new SweepRunRecorder("prepared_ofdr_analysis");
+                var input = preparedInput ?? await Task.Run(() => new IndependentOfdrInput
                 {
                     Auxiliary = channelReader.Read(AuxiliaryPath, 1, cancellation.Token, auxiliaryProgress),
                     SignalAuxiliary = channelReader.Read(SignalAuxiliaryPath, 1, cancellation.Token, signalAuxiliaryProgress),
@@ -222,7 +293,12 @@ namespace OFDR_Signal_Generator.ViewModels
                     Signal = channelReader.Read(SignalPath, expectedPolChannel, cancellation.Token, signalProgress)
                 });
                 IndependentOfdrProcessingEngine.ValidateInput(input);
-                InputValidationText = string.Format(CultureInfo.InvariantCulture, "검증 완료: 기준 CH1 {0}, Ref {1}, 측정 CH1 {2}, Sig {3}, {4:N0} 포인트",
+                if (preparedLog != null)
+                {
+                    JsonContractSerializer.Write(Path.Combine(preparedLog.DirectoryPath, "ref_preparation.json"), input.Reference.Preparation);
+                    JsonContractSerializer.Write(Path.Combine(preparedLog.DirectoryPath, "signal_preparation.json"), input.Signal.Preparation);
+                }
+                InputValidationText = string.Format(CultureInfo.InvariantCulture, "검증 완료: 기준 보조 {0}, Ref {1}, 측정 보조 {2}, Sig {3}, {4:N0} 포인트",
                     input.Auxiliary.MeasurementId, input.Reference.MeasurementId, input.SignalAuxiliary.MeasurementId, input.Signal.MeasurementId, input.Signal.Values.Length);
                 var config = new IndependentOfdrProcessingConfig
                 {
@@ -256,24 +332,28 @@ namespace OFDR_Signal_Generator.ViewModels
                 };
                 var processingProgress = new Progress<OperationProgress>(value => UpdateProgress(value, 30.0, 100.0));
                 engine = new IndependentOfdrProcessingEngine();
+                if (preparedLog != null) JsonContractSerializer.Write(Path.Combine(preparedLog.DirectoryPath, "processing_config.json"), config);
                 var result = await Task.Run(() => engine.Run(input, config, cancellation.Token, processingProgress));
                 if (ProcessingResult != null) ProcessingResult.Dispose();
                 ProcessingResult = result;
+                if (preparedLog != null) JsonContractSerializer.Write(Path.Combine(preparedLog.DirectoryPath, "result.json"), result);
                 SelectedSegment = result.SelectedSegment;
                 SelectedSegmentIndex = result.SelectedSegment.SegmentIndex;
                 ProgressPercent = 100.0;
                 ProgressText = string.Format(CultureInfo.InvariantCulture, "전체 처리 완료: {0:N0} 포인트, {1:N0} Segment, {2}", result.SampleCount, result.SegmentStarts.Length, result.Polarization);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
+                preparedFailure = ex;
                 ProgressText = "사용자 요청으로 처리를 취소했습니다.";
             }
             catch (Exception ex)
             {
+                preparedFailure = ex;
                 ProgressText = "처리 실패: " + ex.Message;
                 InputValidationText = "입력 검증 또는 처리 중 오류가 발생했습니다: " + ex.Message;
             }
-            finally { EndOperation(); }
+            finally { try { preparedLog?.Finish(preparedFailure); } catch (Exception ex) { ProgressText += " / 결과 기록 실패: " + ex.Message; } EndOperation(); }
         }
 
         private async void ConvertInputAsync(InputRole role)
@@ -318,7 +398,7 @@ namespace OFDR_Signal_Generator.ViewModels
         {
             var dialog = new OpenFileDialog { Title = title, Filter = "OFDR channel (*.isf;*.csv)|*.isf;*.csv|ISF (*.isf)|*.isf|CSV (*.csv)|*.csv|모든 파일 (*.*)|*.*", Multiselect = false };
             if (Directory.Exists(DefaultDataRoot)) dialog.InitialDirectory = DefaultDataRoot;
-            if (dialog.ShowDialog() == true) setter(dialog.FileName);
+            if (dialog.ShowDialog() == true) { ClearPreparedInput(); setter(dialog.FileName); }
         }
 
         private void BrowseOutputFolder()
@@ -348,6 +428,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
         private void BeginOperation(string message)
         {
+            operationIdle = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             cancellation?.Dispose();
             cancellation = new CancellationTokenSource();
             IsBusy = true;
@@ -355,7 +436,8 @@ namespace OFDR_Signal_Generator.ViewModels
             ProgressText = message;
         }
 
-        private void EndOperation() { IsBusy = false; }
+        private void EndOperation() { IsBusy = false; operationIdle?.TrySetResult(true); }
+        public Task CancelAndWaitAsync() { cancellation?.Cancel(); return operationIdle?.Task ?? Task.CompletedTask; }
         private void Cancel() { cancellation?.Cancel(); ProgressText = "취소 요청을 전달했습니다..."; }
 
         private void UpdateProgress(OperationProgress value, double start, double end)
@@ -409,6 +491,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
         private void RaiseCommandStates()
         {
+            ModeHopPreview.SweepPreparation.RefreshCommands(); UseLegacyInputsCommand?.RaiseCanExecuteChanged();
             BrowseAuxiliaryCommand?.RaiseCanExecuteChanged();
             BrowseSignalAuxiliaryCommand?.RaiseCanExecuteChanged();
             BrowseReferenceCommand?.RaiseCanExecuteChanged();

@@ -1,4 +1,4 @@
-<Window x:Class="OFDR_Signal_Generator.MainWindow"
+﻿<Window x:Class="OFDR_Signal_Generator.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -44,7 +44,7 @@
         </Style>
     </Window.Resources>
 
-    <TabControl x:Name="WorkspaceTabs" Margin="8">
+    <TabControl x:Name="WorkspaceTabs" Margin="8" SelectedIndex="{Binding WorkspaceSelectedTab}">
         <TabItem Header="전체 신호 / Mode hop">
             <controls:ModeHopPreviewView DataContext="{Binding ModeHopPreview}" />
         </TabItem>
@@ -65,15 +65,16 @@
 
             <StackPanel Grid.Row="0" Margin="4,0,4,12">
                 <TextBlock Text="OFDR 독립 채널 분석" FontSize="25" FontWeight="Bold" Foreground="#FF0F172A" />
+                <Button Content="기존 CH1/CH2/CH3 파일 입력으로 전환" Command="{Binding UseLegacyInputsCommand}" Margin="0,5,0,0"/>
                 <TextBlock Margin="0,6,0,0" Foreground="#FF475569" TextWrapping="Wrap"
-                           Text="Ref와 Sig가 취득된 각 sweep의 CH1을 함께 선택하여 두 sweep을 독립 K-linearization한 뒤 Rayleigh spectral shift를 계산합니다." />
+                           Text="Ref와 Sig가 동시 취득한 각 보조간섭계로 독립 K-linearization한 뒤 Rayleigh spectral shift를 계산합니다." />
             </StackPanel>
 
             <TabControl Grid.Row="1" Margin="0,0,0,8">
                 <TabItem Header="데이터 불러오기">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="8">
-                            <GroupBox Header="기준 sweep 보조간섭계 · Ref와 동시 취득한 CH1">
+                            <GroupBox Header="{Binding ReferenceAuxiliaryLabel}">
                                 <StackPanel>
                                     <TextBox Text="{Binding AuxiliaryPath}" IsReadOnly="True" TextWrapping="Wrap" />
                                     <StackPanel Orientation="Horizontal">
@@ -83,7 +84,7 @@
                                 </StackPanel>
                             </GroupBox>
 
-                            <GroupBox Header="측정 sweep 보조간섭계 · Sig와 동시 취득한 CH1">
+                            <GroupBox Header="{Binding SignalAuxiliaryLabel}">
                                 <StackPanel>
                                     <TextBox Text="{Binding SignalAuxiliaryPath}" IsReadOnly="True" TextWrapping="Wrap" />
                                     <StackPanel Orientation="Horizontal">
@@ -93,7 +94,7 @@
                                 </StackPanel>
                             </GroupBox>
 
-                            <GroupBox Header="Ref · 0.0 mm CH2/CH3">
+                            <GroupBox Header="Ref · 기준 측정 신호">
                                 <StackPanel>
                                     <TextBox Text="{Binding ReferencePath}" IsReadOnly="True" TextWrapping="Wrap" />
                                     <StackPanel Orientation="Horizontal">
@@ -103,7 +104,7 @@
                                 </StackPanel>
                             </GroupBox>
 
-                            <GroupBox Header="Sig · 0.0 mm 초과, Ref와 동일 채널">
+                            <GroupBox Header="Sig · Ref와 동일한 측정 채널">
                                 <StackPanel>
                                     <TextBox Text="{Binding SignalPath}" IsReadOnly="True" TextWrapping="Wrap" />
                                     <StackPanel Orientation="Horizontal">
@@ -133,7 +134,7 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="편광 채널" />
-                            <ComboBox ItemsSource="{Binding PolarizationOptions}" SelectedItem="{Binding SelectedPolarization}" />
+                            <ComboBox ItemsSource="{Binding PolarizationOptions}" SelectedItem="{Binding SelectedPolarization}" IsEnabled="{Binding IsLegacyInput}" />
 
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Window Filter 종류" />
                             <ComboBox ItemsSource="{Binding WindowFunctions}" SelectedItem="{Binding SelectedWindowFunction}" />
@@ -162,7 +163,7 @@
                             <TextBox Text="{Binding CorrelationScale, UpdateSourceTrigger=PropertyChanged}" />
                             <CheckBox IsChecked="{Binding NormalizeCorrelation}" Content="Ref×Sig Cross Correlation 정규화" Margin="0,4,0,12" />
 
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="CH1 비단조 비율 한계" />
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="보조간섭계 비단조 비율 한계" />
                             <TextBox Text="{Binding MaxNonmonotonicRatio, UpdateSourceTrigger=PropertyChanged}" />
 
                             <TextBlock Style="{StaticResource FieldLabel}" Text="그래프 미리보기 최대 포인트" />
@@ -274,8 +275,14 @@
 
             <GroupBox Grid.Row="2" Header="실행 상태" Margin="0">
                 <StackPanel>
+                    <ScrollViewer MaxHeight="175" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer.Style><Style TargetType="ScrollViewer"><Style.Triggers><DataTrigger Binding="{Binding IsLegacyInput}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ScrollViewer.Style>
+                        <TextBlock Text="{Binding ProcessingReadiness}" TextWrapping="Wrap" Margin="0,0,0,7" AutomationProperties.AutomationId="ProcessingQcReadiness">
+                            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="#0F766E"/><Style.Triggers><DataTrigger Binding="{Binding IsProcessingQcBlocked}" Value="True"><Setter Property="Foreground" Value="#9F1239"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                        </TextBlock>
+                    </ScrollViewer>
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="전체 처리 실행" Command="{Binding RunProcessingCommand}" />
+                        <Button Content="전체 처리 실행" Command="{Binding RunProcessingCommand}" ToolTip="{Binding ProcessingReadiness}" ToolTipService.ShowOnDisabled="True" AutomationProperties.AutomationId="RunOfdrProcessing" />
                         <Button Content="취소" Command="{Binding CancelCommand}" Background="#FFB45309" BorderBrush="#FFB45309" />
                     </StackPanel>
                     <ProgressBar Height="16" Minimum="0" Maximum="100" Value="{Binding ProgressPercent, Mode=OneWay}" Margin="0,2,0,7" />
@@ -290,15 +297,15 @@
                     <StackPanel Margin="8">
                         <Border Padding="10" Margin="6" Background="#FFEFF6FF" BorderBrush="#FFBFDBFE" BorderThickness="1" CornerRadius="5">
                             <TextBlock TextWrapping="Wrap" Foreground="#FF1E3A5F"
-                                       Text="기준 sweep CH1과 측정 sweep CH1을 각각 위상 추출·보간한 뒤 더 짧은 공통 상대 위상 범위로 Ref/Sig를 맞춥니다." />
+                                       Text="각 sweep의 보조간섭계를 독립 위상 추출·보간한 뒤 더 짧은 공통 상대 위상 범위와 같은 샘플 수로 Ref/Sig를 맞춥니다." />
                         </Border>
                         <UniformGrid Columns="2">
-                            <GroupBox Header="기준 CH1 Raw">
+                            <GroupBox Header="기준 보조간섭계 Raw">
                                 <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.KDiagnostics.AuxiliaryRaw.Values}"
                                                      XStartValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryRaw.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryRaw.XEnd}"
                                                      XAxisTitle="샘플 번호" YAxisTitle="전압 (V)" />
                             </GroupBox>
-                            <GroupBox Header="기준 CH1 평균 제거">
+                            <GroupBox Header="기준 보조간섭계 평균 제거">
                                 <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.KDiagnostics.AuxiliaryMeanRemoved.Values}"
                                                      XStartValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryMeanRemoved.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryMeanRemoved.XEnd}"
                                                      XAxisTitle="샘플 번호" YAxisTitle="전압 (V)" />
@@ -328,7 +335,7 @@
                                                      XStartValue="{Binding ProcessingResult.KDiagnostics.UniformPhaseGrid.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.UniformPhaseGrid.XEnd}"
                                                      XAxisTitle="Normalized-k 샘플" YAxisTitle="위상 (rad)" />
                             </GroupBox>
-                            <GroupBox Header="측정 CH1 Raw">
+                            <GroupBox Header="측정 보조간섭계 Raw">
                                 <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.SignalKDiagnostics.AuxiliaryRaw.Values}"
                                                      XStartValue="{Binding ProcessingResult.SignalKDiagnostics.AuxiliaryRaw.XStart}" XEndValue="{Binding ProcessingResult.SignalKDiagnostics.AuxiliaryRaw.XEnd}"
                                                      XAxisTitle="샘플 번호" YAxisTitle="전압 (V)" />

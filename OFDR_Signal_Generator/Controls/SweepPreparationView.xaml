@@ -1,0 +1,42 @@
+<UserControl x:Class="OFDR_Signal_Generator.Controls.SweepPreparationView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="clr-namespace:OFDR_Signal_Generator.Controls">
+ <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+ <Grid Margin="10">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel IsEnabled="{Binding CanEdit}">
+   <TextBlock Text="4채널 스윕 → OFDR 입력" FontSize="22" FontWeight="Bold"/>
+   <TextBlock Text="CH1: 스윕 시작 (1.8 V 상승) · CH2: Mode hop · CH3: 보조간섭계 · CH4: 측정 신호" Margin="0,4,0,6"/>
+   <DockPanel><Button DockPanel.Dock="Left" Content="Ref 원본 선택..." Command="{Binding BrowseRefCommand}"/><TextBox Text="{Binding RefPath, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="SweepRefPath"/></DockPanel>
+   <DockPanel><Button DockPanel.Dock="Left" Content="Signal 원본 선택..." Command="{Binding BrowseSignalCommand}"/><TextBox Text="{Binding SignalPath, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="SweepSignalPath"/></DockPanel>
+   <WrapPanel>
+    <ComboBox Width="100" ItemsSource="{Binding Roles}" SelectedItem="{Binding ActiveRole}" AutomationProperties.AutomationId="SweepRole"/>
+    <Button Content="선택 역할 원본 읽기" Command="{Binding LoadCommand}"/>
+    <TextBlock Text="CH2 제외 문턱값 (V)" VerticalAlignment="Center" Margin="0,0,5,8"/>
+    <TextBox Width="65" Text="{Binding ModeHopThresholdText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="SweepModeHopThreshold"/>
+    <ComboBox Width="420" ItemsSource="{Binding Sweeps}" SelectedItem="{Binding SelectedSweep}" AutomationProperties.AutomationId="SweepSelection"/>
+    <Button Content="1. 선택 스윕 접합 / 검토" Command="{Binding ReviewCommand}" AutomationProperties.AutomationId="SweepReview"/>
+    <Button Content="3. 진단 구간을 현재 역할로 확정" Command="{Binding ConfirmCommand}" AutomationProperties.AutomationId="SweepConfirm"/>
+   </WrapPanel>
+   <WrapPanel>
+    <Button Content="QC 통과 입력을 OFDR 분석에 적용" Command="{Binding ApplyCommand}" AutomationProperties.AutomationId="SweepApply" ToolTip="{Binding AnalysisReadiness}" ToolTipService.ShowOnDisabled="True"/>
+    <Button Content="Ref CSV 저장..." Command="{Binding SaveRefCommand}"/><Button Content="Signal CSV 저장..." Command="{Binding SaveSignalCommand}"/>
+    <Button Content="생성 Ref CSV 읽기..." Command="{Binding ImportRefCommand}"/><Button Content="생성 Signal CSV 읽기..." Command="{Binding ImportSignalCommand}"/>
+   </WrapPanel>
+  </StackPanel>
+  <StackPanel Grid.Row="1" Margin="0,0,0,5">
+   <TextBlock Text="{Binding RefSummary, StringFormat=Ref: {0}}" Foreground="#0F766E"/>
+   <TextBlock Text="{Binding SignalSummary, StringFormat=Signal: {0}}" Foreground="#0369A1"/>
+   <Border Padding="8" Margin="0,4,0,5" Background="#FFF1F2" BorderBrush="#FECDD3" BorderThickness="1">
+    <TextBlock Text="{Binding AnalysisReadiness}" TextWrapping="Wrap" AutomationProperties.AutomationId="SweepQcReadiness">
+     <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="#9F1239"/><Style.Triggers><DataTrigger Binding="{Binding CanAnalyzeConfirmed}" Value="True"><Setter Property="Foreground" Value="#0F766E"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+    </TextBlock>
+   </Border>
+   <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.AutomationId="SweepStatus"/>
+   <Button Content="취소" Command="{Binding CancelCommand}" HorizontalAlignment="Right"/>
+  </StackPanel>
+  <local:AuxiliaryQualityView Grid.Row="2" Height="740" DataContext="{Binding Quality}"/>
+ </Grid>
+ </ScrollViewer>
+</UserControl>

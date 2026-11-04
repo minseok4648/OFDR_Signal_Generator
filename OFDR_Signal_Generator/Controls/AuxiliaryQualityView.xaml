@@ -1,16 +1,17 @@
-<UserControl x:Class="OFDR_Signal_Generator.Controls.AuxiliaryQualityView"
+﻿<UserControl x:Class="OFDR_Signal_Generator.Controls.AuxiliaryQualityView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:OFDR_Signal_Generator.Controls">
     <Grid Margin="14">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel>
             <TextBlock Text="접합 후 보조간섭계 품질 검토" FontSize="23" FontWeight="Bold"/>
+            <TextBlock Text="{Binding SourceDescription}" Foreground="#0369A1"/>
             <TextBlock Margin="0,5,0,10" TextWrapping="Wrap" Foreground="#475569" Text="트리거 High 샘플을 제거하고 나머지를 그대로 접합합니다. 시간축은 제거 시간이 압축된 환산 시간이며, 실제 취득 시간은 원본 인덱스로 보존됩니다."/>
             <WrapPanel>
                 <Button Content="1. 제외 후 접합" Command="{Binding StitchCommand}" AutomationProperties.AutomationId="AuxStitch"/>
-                <StackPanel Width="145" Margin="0,0,10,0"><TextBlock Text="분석 시작 (접합 ms)"/><TextBox Text="{Binding StartText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="AuxStart"/></StackPanel>
-                <StackPanel Width="145" Margin="0,0,10,0"><TextBlock Text="분석 끝 (접합 ms)"/><TextBox Text="{Binding EndText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="AuxEnd"/></StackPanel>
-                <StackPanel Width="145" Margin="0,0,10,0"><TextBlock Text="비단조 비율 한계"/><TextBox Text="{Binding RatioText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="AuxRatio"/></StackPanel>
+                <StackPanel Width="145" Margin="0,0,10,0"><TextBlock Text="분석 시작 (접합 ms)"/><TextBox IsEnabled="{Binding IsEditable}" Text="{Binding StartText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="AuxStart"/></StackPanel>
+                <StackPanel Width="145" Margin="0,0,10,0"><TextBlock Text="분석 끝 (접합 ms)"/><TextBox IsEnabled="{Binding IsEditable}" Text="{Binding EndText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="AuxEnd"/></StackPanel>
+                <StackPanel Width="145" Margin="0,0,10,0"><TextBlock Text="비단조 비율 한계"/><TextBox IsEnabled="{Binding IsEditable}" Text="{Binding RatioText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="AuxRatio"/></StackPanel>
                 <Button Content="2. 선택 구간 위상 분석" Command="{Binding AnalyzeCommand}" VerticalAlignment="Bottom" AutomationProperties.AutomationId="AuxAnalyze"/>
                 <Button Content="취소" Command="{Binding CancelCommand}" VerticalAlignment="Bottom"/>
                 <Button Content="진단 구간 CSV 저장..." Command="{Binding ExportDiagnosedCommand}" VerticalAlignment="Bottom" AutomationProperties.AutomationId="AuxExportDiagnosed" ToolTip="마지막으로 진단을 완료한 구간의 접합 전압을 전체 해상도로 저장합니다. 입력란 수정·화면 확대와 무관하며 위상 보간 전 신호입니다."/>
@@ -23,10 +24,13 @@
         </StackPanel>
         <TabControl Grid.Row="2" SelectedIndex="{Binding SelectedTab, Mode=TwoWay}">
             <TabItem Header="접합 신호 / 범위 선택">
-                <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*" MinHeight="230"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <TextBlock Margin="8" Text="가로로 드래그하면 분석 시작·끝에 반영됩니다. 노란 선은 직접 접합한 지점입니다."/>
                     <local:AuxiliaryDiagnosticPlot Grid.Row="1" Plot="{Binding SignalPlot, Mode=OneWay}" RangeRequested="Signal_RangeRequested"/>
-                </Grid>
+                    <local:AuxiliaryDiagnosticPlot Grid.Row="2" Height="155" Plot="{Binding MeasurementPlot}" RangeRequested="Signal_RangeRequested">
+                        <local:AuxiliaryDiagnosticPlot.Style><Style TargetType="local:AuxiliaryDiagnosticPlot"><Style.Triggers><DataTrigger Binding="{Binding MeasurementPlot}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></local:AuxiliaryDiagnosticPlot.Style>
+                    </local:AuxiliaryDiagnosticPlot>
+                </Grid></ScrollViewer>
             </TabItem>
             <TabItem Header="위상 / Grid 진단">
                 <ScrollViewer x:Name="DiagnosticsScroll" VerticalScrollBarVisibility="Auto">

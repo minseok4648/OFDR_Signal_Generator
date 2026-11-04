@@ -16,6 +16,12 @@ namespace OFDR_Signal_Generator.ViewModels
     {
         private readonly AuxiliaryQualityEngine engine = new AuxiliaryQualityEngine();
         private ModeHopRecording source;
+        private ModeHopRecording pairedOriginal;
+        private DiagnosticPlotData measurementPlot;
+        public StitchedAuxiliarySignal Stitched => stitched;
+        public AuxiliaryInspectionSettings DiagnosisSettings => diagnosisSettings;
+        public string SourceDescription => source == null ? "" : Path.GetFileName(source.SourcePath) + " · 원본 인덱스 [" + source.FirstSampleIndex + ", " + (source.FirstSampleIndex + source.SampleCount) + ")";
+        public DiagnosticPlotData MeasurementPlot { get => measurementPlot; private set => SetProperty(ref measurementPlot, value); }
         private ModeHopAnalysis exclusion;
         private StitchedAuxiliarySignal stitched;
         private double threshold;
@@ -40,14 +46,15 @@ namespace OFDR_Signal_Generator.ViewModels
             ExportEntireCommand = new RelayCommand(() => SaveCsv(true), () => Ready && stitched != null);
         }
         private bool Ready => !disposed && !IsBusy && ParentIdle();
+        public bool IsEditable => Ready;
         public RelayCommand StitchCommand { get; }
         public RelayCommand AnalyzeCommand { get; }
         public RelayCommand CancelCommand { get; }
         public RelayCommand ExportDiagnosedCommand { get; }
         public RelayCommand ExportEntireCommand { get; }
-        public string StartText { get => start; set => SetProperty(ref start, value); }
-        public string EndText { get => end; set => SetProperty(ref end, value); }
-        public string RatioText { get => ratio; set => SetProperty(ref ratio, value); }
+        public string StartText { get => start; set { if (SetProperty(ref start, value) && pairedOriginal != null) InvalidateDiagnosis(); } }
+        public string EndText { get => end; set { if (SetProperty(ref end, value) && pairedOriginal != null) InvalidateDiagnosis(); } }
+        public string RatioText { get => ratio; set { if (SetProperty(ref ratio, value) && pairedOriginal != null) InvalidateDiagnosis(); } }
         public string Status { get => status; private set => SetProperty(ref status, value); }
         public string Summary { get => summary; private set => SetProperty(ref summary, value); }
         public string ResultDirectory { get => directory; private set => SetProperty(ref directory, value); }
@@ -56,9 +63,11 @@ namespace OFDR_Signal_Generator.ViewModels
         public DiagnosticPlotData SignalPlot { get => signalPlot; private set => SetProperty(ref signalPlot, value); }
         public AuxiliaryQualityResult Quality { get => quality; private set { SetProperty(ref quality, value); if (value == null) diagnosisSettings = null; OnPropertyChanged(nameof(Plots)); } }
         public IReadOnlyList<DiagnosticPlotData> Plots => Quality?.Plots;
-        public void UpdateSource(ModeHopRecording recording, ModeHopAnalysis analysis, double appliedThreshold)
+        public void InvalidateDiagnosis() { Quality = null; RefreshCommands(); }
+        public void UpdateSource(ModeHopRecording recording, ModeHopAnalysis analysis, double appliedThreshold, ModeHopRecording original = null)
         {
-            source = recording; exclusion = analysis; threshold = appliedThreshold;
+            source = recording; exclusion = analysis; threshold = appliedThreshold; pairedOriginal = original; MeasurementPlot = null;
+            OnPropertyChanged(nameof(SourceDescription));
             stitched = null; SignalPlot = null; Quality = null; Summary = ""; EndText = ""; StartText = "0"; SelectedTab = 0;
             Status = recording == null ? "먼저 원본 CSV를 읽으세요." : "문턱값 적용 완료. '제외 후 접합'을 누르세요. 문턱값을 재적용하면 이 결과는 초기화됩니다.";
             RefreshCommands();
@@ -74,8 +83,9 @@ namespace OFDR_Signal_Generator.ViewModels
                 var recording = source; var ranges = exclusion; var token = cancellation.Token;
                 var result = await Task.Run(() => engine.Stitch(recording, ranges, token));
                 var preview = await Task.Run(() => engine.SignalPreview(result, 10000, token));
+                var measurement = pairedOriginal == null ? null : await Task.Run(() => new SweepPreparationEngine().MeasurementPreview(pairedOriginal, result, token));
                 token.ThrowIfCancellationRequested();
-                stitched = result; SignalPlot = preview;
+                stitched = result; SignalPlot = preview; MeasurementPlot = measurement;
                 StartText = "0"; EndText = (result.DurationSeconds * 1000).ToString("G12", CultureInfo.InvariantCulture); SelectedTab = 0;
                 Summary = string.Format(CultureInfo.InvariantCulture, "{0:N0} → {1:N0} samples · 접합점 {2:N0}개 · 접합 환산 길이 {3:F7} s", source.SampleCount, result.Values.Length, result.JoinIndices.Length, result.DurationSeconds);
                 Status = "접합 완료. 진폭 보정 없이 남은 샘플을 그대로 이어 붙였습니다. 그래프를 드래그하거나 시작·끝 시간을 입력한 뒤 위상 분석을 실행하세요.";
@@ -168,9 +178,9 @@ namespace OFDR_Signal_Generator.ViewModels
         {
             try { log?.Finish(stitched, Quality, error); } catch (Exception ex) { Status += " / 결과 기록 실패: " + ex.Message; }
         }
-        public void RefreshCommands() { StitchCommand?.RaiseCanExecuteChanged(); AnalyzeCommand?.RaiseCanExecuteChanged(); CancelCommand?.RaiseCanExecuteChanged(); ExportDiagnosedCommand?.RaiseCanExecuteChanged(); ExportEntireCommand?.RaiseCanExecuteChanged(); }
+        public void RefreshCommands() { OnPropertyChanged(nameof(IsEditable)); StitchCommand?.RaiseCanExecuteChanged(); AnalyzeCommand?.RaiseCanExecuteChanged(); CancelCommand?.RaiseCanExecuteChanged(); ExportDiagnosedCommand?.RaiseCanExecuteChanged(); ExportEntireCommand?.RaiseCanExecuteChanged(); }
         public void Cancel() { cancellation?.Cancel(); }
         public Task CancelAndWaitAsync() { Cancel(); return idle?.Task ?? Task.CompletedTask; }
-        public void Dispose() { disposed = true; Cancel(); stitched = null; source = null; exclusion = null; }
+        public void Dispose() { disposed = true; Cancel(); stitched = null; source = null; pairedOriginal = null; exclusion = null; }
     }
 }
