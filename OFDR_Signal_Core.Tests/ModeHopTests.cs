@@ -62,6 +62,130 @@ namespace OFDR_Signal_Core.Tests
         }
 
         [TestMethod]
+        public void PulseTailAddsExactlyPointOneMillisecondsAtTwoPointFiveMsps()
+        {
+            var trigger = new double[2000]; for (var i = 100; i < 1350; i++) trigger[i] = 3.4;
+            var source = new TekScopeCsvReader().Read(Csv(trigger, 4e-7), CancellationToken.None);
+            var result = engine.Detect(source, new ModeHopSettings { ExclusionTailSeconds = 0.1 / 1000 }, CancellationToken.None);
+            Assert.AreEqual(1, result.Ranges.Count); Assert.AreEqual(100, result.Ranges[0].StartIndex);
+            Assert.AreEqual(1600, result.Ranges[0].EndIndexExclusive); Assert.AreEqual(1500L, result.ExcludedSamples);
+            Assert.AreEqual(0.0006, result.ExcludedSeconds, 1e-15);
+            Assert.AreEqual(1350, engine.Detect(source, new ModeHopSettings(), CancellationToken.None).Ranges[0].EndIndexExclusive);
+        }
+
+        [TestMethod]
+        public void PulseTailMergesOverlapsAndClipsAtRecordEndWithoutDoubleCounting()
+        {
+            var source = new TekScopeCsvReader().Read(Csv(new[] { 3.4, 0, 0, 3.4, 0, 0, 0, 0, 0, 3.4 }), CancellationToken.None);
+            var result = engine.Detect(source, new ModeHopSettings { ExclusionTailSeconds = 0.003 }, CancellationToken.None);
+            Assert.AreEqual(2, result.Ranges.Count); Assert.AreEqual(0, result.Ranges[0].StartIndex);
+            Assert.AreEqual(7, result.Ranges[0].EndIndexExclusive); Assert.AreEqual(9, result.Ranges[1].StartIndex);
+            Assert.AreEqual(10, result.Ranges[1].EndIndexExclusive); Assert.AreEqual(8L, result.ExcludedSamples);
+            Assert.AreEqual(80, result.ExcludedPercent, 1e-12);
+            Assert.AreEqual(0L, engine.Detect(source, new ModeHopSettings { ThresholdVoltage = 4, ExclusionTailSeconds = 1 }, CancellationToken.None).ExcludedSamples);
+            Assert.AreEqual(10L, engine.Detect(source, new ModeHopSettings { ThresholdVoltage = -1, ExclusionTailSeconds = 1 }, CancellationToken.None).ExcludedSamples);
+        }
+
+        [TestMethod]
+        public void PulseTailRoundsFractionalSamplesUpAndHandlesLargeOffsets()
+        {
+            var source = new TekScopeCsvReader().Read(Csv(new[] { 0.0, 0, 3.4, 0, 0, 0, 0, 0 }), CancellationToken.None);
+            Assert.AreEqual(5, engine.Detect(source, new ModeHopSettings { ExclusionTailSeconds = 0.0011 }, CancellationToken.None).Ranges[0].EndIndexExclusive);
+            Assert.AreEqual(4, engine.Detect(source, new ModeHopSettings { ExclusionTailSeconds = double.Epsilon }, CancellationToken.None).Ranges[0].EndIndexExclusive);
+            Assert.AreEqual(8, engine.Detect(source, new ModeHopSettings { ExclusionTailSeconds = double.MaxValue }, CancellationToken.None).Ranges[0].EndIndexExclusive);
+        }
+
+        [TestMethod]
+        public void PulseTailCrossingSweepStartIsClippedFromFullRecordMask()
+        {
+            var source = new TekScopeCsvReader().Read(Csv(new[] { 0.0, 0, 3.4, 0, 0, 0, 0, 0, 0 }), CancellationToken.None);
+            var full = engine.Detect(source, new ModeHopSettings { ExclusionTailSeconds = 0.004 }, CancellationToken.None);
+            var clipped = engine.ClipToSamples(full, 4, 9, source.SampleIntervalSeconds, CancellationToken.None);
+            Assert.AreEqual(0, clipped.Ranges[0].StartIndex); Assert.AreEqual(3, clipped.Ranges[0].EndIndexExclusive);
+            Assert.AreEqual(3L, clipped.ExcludedSamples); Assert.AreEqual(0.004, clipped.ExclusionTailSeconds);
+            using (var cancel = new CancellationTokenSource())
+            {
+                cancel.Cancel(); Assert.Throws<OperationCanceledException>(() => engine.ClipToSamples(full, 4, 9, source.SampleIntervalSeconds, cancel.Token));
+            }
+        }
+
+        [TestMethod]
+        public void PulseLeadAndTailAddIndependentExactSampleCounts()
+        {
+            var trigger = new double[3000]; for (var i = 500; i < 1750; i++) trigger[i] = 3.4;
+            var source = new TekScopeCsvReader().Read(Csv(trigger, 4e-7), CancellationToken.None);
+            var result = engine.Detect(source, new ModeHopSettings { ExclusionLeadSeconds = 0.0001, ExclusionTailSeconds = 0.0002 }, CancellationToken.None);
+            Assert.AreEqual(1, result.Ranges.Count); Assert.AreEqual(250, result.Ranges[0].StartIndex);
+            Assert.AreEqual(2250, result.Ranges[0].EndIndexExclusive); Assert.AreEqual(2000L, result.ExcludedSamples);
+            Assert.AreEqual(0.0008, result.ExcludedSeconds, 1e-15);
+            var preview = engine.Preview(source, result, new ModeHopSettings(), 0, source.DurationSeconds, CancellationToken.None);
+            Assert.AreEqual(0.0001, preview.Ranges[0].StartSeconds, 1e-15);
+            Assert.AreEqual(0.0009, preview.Ranges[0].EndSeconds, 1e-15);
+        }
+
+        [TestMethod]
+        public void PulseLeadMergesTouchingRangesAndClipsAtBothRecordEdges()
+        {
+            var source = new TekScopeCsvReader().Read(Csv(new[] { 3.4, 0, 0, 0, 0, 3.4, 0, 0, 0, 0, 0, 3.4 }), CancellationToken.None);
+            var settings = new ModeHopSettings { ExclusionLeadSeconds = 0.003, ExclusionTailSeconds = 0.002 };
+            var result = engine.Detect(source, settings, CancellationToken.None);
+            Assert.AreEqual(1, result.Ranges.Count); Assert.AreEqual(0, result.Ranges[0].StartIndex);
+            Assert.AreEqual(12, result.Ranges[0].EndIndexExclusive); Assert.AreEqual(12L, result.ExcludedSamples);
+            settings.ExclusionTailSeconds = 0;
+            var leadOnly = engine.Detect(source, settings, CancellationToken.None);
+            Assert.AreEqual(3, leadOnly.Ranges.Count); Assert.AreEqual(9L, leadOnly.ExcludedSamples);
+            settings.ThresholdVoltage = 4; Assert.AreEqual(0L, engine.Detect(source, settings, CancellationToken.None).ExcludedSamples);
+            settings.ThresholdVoltage = -1; Assert.AreEqual(12L, engine.Detect(source, settings, CancellationToken.None).ExcludedSamples);
+        }
+
+        [TestMethod]
+        public void PulseLeadRoundsUpAndClipsLargeOffsets()
+        {
+            var source = new TekScopeCsvReader().Read(Csv(new[] { 0.0, 0, 0, 0, 3.4, 0 }), CancellationToken.None);
+            Assert.AreEqual(2, engine.Detect(source, new ModeHopSettings { ExclusionLeadSeconds = 0.0011 }, CancellationToken.None).Ranges[0].StartIndex);
+            Assert.AreEqual(3, engine.Detect(source, new ModeHopSettings { ExclusionLeadSeconds = double.Epsilon }, CancellationToken.None).Ranges[0].StartIndex);
+            Assert.AreEqual(0, engine.Detect(source, new ModeHopSettings { ExclusionLeadSeconds = double.MaxValue }, CancellationToken.None).Ranges[0].StartIndex);
+        }
+
+        [TestMethod]
+        public void PulseLeadFromFollowingSweepClipsToSelectedSweepEnd()
+        {
+            var source = new TekScopeCsvReader().Read(Csv(new[] { 0.0, 0, 0, 0, 0, 0, 0, 3.4, 0 }), CancellationToken.None);
+            var settings = new ModeHopSettings { ExclusionLeadSeconds = 0.004 };
+            var full = engine.Detect(source, settings, CancellationToken.None);
+            var clipped = engine.ClipToSamples(full, 0, 5, source.SampleIntervalSeconds, CancellationToken.None);
+            Assert.AreEqual(3, clipped.Ranges[0].StartIndex); Assert.AreEqual(5, clipped.Ranges[0].EndIndexExclusive);
+            Assert.AreEqual(2L, clipped.ExcludedSamples); Assert.AreEqual(0.004, clipped.ExclusionLeadSeconds);
+            using (var cancel = new CancellationTokenSource())
+            {
+                cancel.Cancel(); Assert.Throws<OperationCanceledException>(() => engine.Detect(source, settings, cancel.Token));
+            }
+        }
+
+        [TestMethod]
+        public void PulseLeadDoesNotPadInfinityOnlyExclusions()
+        {
+            var source = new TekScopeCsvReader().Read(Csv(new[] { 0.0, 0, double.PositiveInfinity, 0, 0 }), CancellationToken.None);
+            var result = engine.Detect(source, new ModeHopSettings { ExclusionLeadSeconds = 1, ExclusionTailSeconds = 1 }, CancellationToken.None);
+            Assert.AreEqual(1L, result.ExcludedSamples); Assert.AreEqual(2, result.Ranges[0].StartIndex);
+            Assert.AreEqual(3, result.Ranges[0].EndIndexExclusive); Assert.AreEqual(1, result.IgnoredSamples);
+        }
+
+        [TestMethod]
+        public void PulseTailSettingsRoundtripAndOlderSettingsDefaultToZero()
+        {
+            var path = Path.Combine(folder, "tail.json");
+            JsonContractSerializer.Write(path, new ModeHopSettings { ExclusionTailSeconds = 0.0001, ExclusionLeadSeconds = 0.0002 });
+            Assert.AreEqual(0.0001, JsonContractSerializer.Read<ModeHopSettings>(path).ExclusionTailSeconds);
+            Assert.AreEqual(0.0002, JsonContractSerializer.Read<ModeHopSettings>(path).ExclusionLeadSeconds);
+            File.WriteAllText(path, "{\"ThresholdVoltage\":1.8,\"MaximumPreviewPoints\":10000}");
+            var old = JsonContractSerializer.Read<ModeHopSettings>(path); old.Validate(); Assert.AreEqual(0, old.ExclusionTailSeconds);
+            Assert.AreEqual(0, old.ExclusionLeadSeconds);
+            foreach (var invalid in new[] { -1.0, double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+                Assert.Throws<ArgumentException>(() => new ModeHopSettings { ExclusionLeadSeconds = invalid }.Validate());
+        }
+
+        [TestMethod]
         public void RecalculationPreservesRawAndDoesNotNeedSourceFile()
         {
             var path = Csv(new[] { 0.2, 1.9, 3.4, 0.2 });
@@ -162,7 +286,7 @@ namespace OFDR_Signal_Core.Tests
         [TestMethod]
         public void InvalidSettingsAreRejected()
         {
-            foreach (var settings in new[] { new ModeHopSettings { ThresholdVoltage = double.NaN }, new ModeHopSettings { SweepDurationSeconds = 0 }, new ModeHopSettings { SweepOriginSeconds = -1 }, new ModeHopSettings { MaximumPreviewPoints = 10001 } })
+            foreach (var settings in new[] { new ModeHopSettings { ThresholdVoltage = double.NaN }, new ModeHopSettings { ExclusionTailSeconds = -1 }, new ModeHopSettings { ExclusionTailSeconds = double.NaN }, new ModeHopSettings { ExclusionTailSeconds = double.PositiveInfinity }, new ModeHopSettings { SweepDurationSeconds = 0 }, new ModeHopSettings { SweepOriginSeconds = -1 }, new ModeHopSettings { MaximumPreviewPoints = 10001 } })
                 Assert.ThrowsExactly<ArgumentException>(() => settings.Validate());
         }
 

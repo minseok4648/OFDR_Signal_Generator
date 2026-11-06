@@ -27,6 +27,11 @@ namespace OFDR_Signal_Core.Models
         [DataMember] public double SourceStartSeconds { get; set; }
         [DataMember] public double SampleIntervalSeconds { get; set; }
         [DataMember] public double ThresholdVoltage { get; set; }
+        [DataMember] public double ExclusionTailSeconds { get; set; }
+        [DataMember] public double ExclusionLeadSeconds { get; set; }
+        [DataMember] public List<ModeHopRange> IgnoredMeasurementRanges { get; set; }
+        private List<ModeHopRange> ignoredSampleRanges;
+        [DataMember] public List<ModeHopRange> IgnoredSampleRanges { get => ignoredSampleRanges ?? IgnoredMeasurementRanges; set => ignoredSampleRanges = value; }
         [DataMember] public bool EntireStitchedSignal { get; set; }
         [DataMember] public int StartIndex { get; set; }
         [DataMember] public int EndIndexExclusive { get; set; }

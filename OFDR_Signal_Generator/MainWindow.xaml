@@ -74,6 +74,10 @@
                 <TabItem Header="데이터 불러오기">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="8">
+                            <Button Content="저장된 진단 CSV와 원본 CH4로 네 입력 설정" Command="{Binding UseSavedCsvFilesCommand}"/>
+                            <CheckBox Content="저장된 진단 CSV 입력 (보조 CH3 / 측정 CH4)" IsChecked="{Binding UseSavedCsvFileInputs}" Margin="0,0,0,8"/>
+                            <CheckBox Content="현재 상태 확인용 진단 실행 (QC 불합격 표시 유지)" IsChecked="{Binding AllowFailedPhaseQcForDiagnostics}" Margin="0,0,0,8" AutomationProperties.AutomationId="DiagnosticExecution"/>
+                            <TextBlock Text="진단 CSV는 보조간섭계입니다. 측정 입력에는 CH4가 있는 원본 또는 통합 CSV를 선택합니다. SourceIndex를 사용해 같은 샘플을 맞춥니다." TextWrapping="Wrap" Foreground="#475569" Margin="0,0,0,8"/>
                             <GroupBox Header="{Binding ReferenceAuxiliaryLabel}">
                                 <StackPanel>
                                     <TextBox Text="{Binding AuxiliaryPath}" IsReadOnly="True" TextWrapping="Wrap" />
@@ -133,8 +137,16 @@
                 <TabItem Header="알고리즘 설정">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10">
+                            <CheckBox Content="261106 노트북 비교 조건 (확정 Raw 직접 처리)" IsChecked="{Binding NotebookReproduction}" AutomationProperties.AutomationId="NotebookRawProcessingMode" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding NotebookModeDescription}" TextWrapping="Wrap" Foreground="#475569" Margin="0,0,0,8"/>
+                            <TextBlock Text="노트북: k 보간 점수 / AUX 시작 offset / 측정 시작 offset" TextWrapping="Wrap"/>
+                            <UniformGrid Columns="3">
+                                <TextBox Text="{Binding NotebookResampledSamples, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBox Text="{Binding NotebookAuxiliarySliceStart, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBox Text="{Binding NotebookMeasurementSliceStart, UpdateSourceTrigger=PropertyChanged}"/>
+                            </UniformGrid>
                             <TextBlock Style="{StaticResource FieldLabel}" Text="편광 채널" />
-                            <ComboBox ItemsSource="{Binding PolarizationOptions}" SelectedItem="{Binding SelectedPolarization}" IsEnabled="{Binding IsLegacyInput}" />
+                            <ComboBox ItemsSource="{Binding PolarizationOptions}" SelectedItem="{Binding SelectedPolarization}" IsEnabled="{Binding UsesLegacyChannelMapping}" />
 
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Window Filter 종류" />
                             <ComboBox ItemsSource="{Binding WindowFunctions}" SelectedItem="{Binding SelectedWindowFunction}" />
@@ -276,28 +288,34 @@
             <GroupBox Grid.Row="2" Header="실행 상태" Margin="0">
                 <StackPanel>
                     <ScrollViewer MaxHeight="175" VerticalScrollBarVisibility="Auto">
-                        <ScrollViewer.Style><Style TargetType="ScrollViewer"><Style.Triggers><DataTrigger Binding="{Binding IsLegacyInput}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ScrollViewer.Style>
+                        <ScrollViewer.Style><Style TargetType="ScrollViewer"><Style.Triggers><DataTrigger Binding="{Binding UsesLegacyChannelMapping}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ScrollViewer.Style>
                         <TextBlock Text="{Binding ProcessingReadiness}" TextWrapping="Wrap" Margin="0,0,0,7" AutomationProperties.AutomationId="ProcessingQcReadiness">
-                            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="#0F766E"/><Style.Triggers><DataTrigger Binding="{Binding IsProcessingQcBlocked}" Value="True"><Setter Property="Foreground" Value="#9F1239"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="#0F766E"/><Style.Triggers><DataTrigger Binding="{Binding AllowFailedPhaseQcForDiagnostics}" Value="True"><Setter Property="Foreground" Value="#B45309"/></DataTrigger><DataTrigger Binding="{Binding IsProcessingQcBlocked}" Value="True"><Setter Property="Foreground" Value="#9F1239"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
                         </TextBlock>
                     </ScrollViewer>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="전체 처리 실행" Command="{Binding RunProcessingCommand}" ToolTip="{Binding ProcessingReadiness}" ToolTipService.ShowOnDisabled="True" AutomationProperties.AutomationId="RunOfdrProcessing" />
                         <Button Content="취소" Command="{Binding CancelCommand}" Background="#FFB45309" BorderBrush="#FFB45309" />
                     </StackPanel>
+                    <TextBlock Text="{Binding AnalysisPurposeSummary}" TextWrapping="Wrap" Foreground="#B45309" Margin="0,0,0,6" AutomationProperties.AutomationId="AnalysisPurpose"/>
                     <ProgressBar Height="16" Minimum="0" Maximum="100" Value="{Binding ProgressPercent, Mode=OneWay}" Margin="0,2,0,7" />
                     <TextBlock Text="{Binding ProgressText}" TextWrapping="Wrap" Foreground="#FF334155" />
                 </StackPanel>
             </GroupBox>
         </Grid>
 
-        <TabControl Grid.Column="2">
+        <Grid Grid.Column="2">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Border Padding="9" Margin="0,0,0,7" Background="#FFF7ED" BorderBrush="#FDBA74" BorderThickness="1" CornerRadius="4">
+            <TextBlock Text="{Binding AnalysisPurposeSummary}" TextWrapping="Wrap" Foreground="#9A3412" FontWeight="SemiBold" AutomationProperties.AutomationId="ResultPurposeBanner"/>
+        </Border>
+        <TabControl Grid.Row="1" AutomationProperties.AutomationId="OfdrResultTabs">
             <TabItem Header="K-linearization">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="8">
                         <Border Padding="10" Margin="6" Background="#FFEFF6FF" BorderBrush="#FFBFDBFE" BorderThickness="1" CornerRadius="5">
                             <TextBlock TextWrapping="Wrap" Foreground="#FF1E3A5F"
-                                       Text="각 sweep의 보조간섭계를 독립 위상 추출·보간한 뒤 더 짧은 공통 상대 위상 범위와 같은 샘플 수로 Ref/Sig를 맞춥니다." />
+                                       Text="{Binding KLinearizationFlowDescription}" />
                         </Border>
                         <UniformGrid Columns="2">
                             <GroupBox Header="기준 보조간섭계 Raw">
@@ -305,7 +323,7 @@
                                                      XStartValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryRaw.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryRaw.XEnd}"
                                                      XAxisTitle="샘플 번호" YAxisTitle="전압 (V)" />
                             </GroupBox>
-                            <GroupBox Header="기준 보조간섭계 평균 제거">
+                            <GroupBox Header="{Binding ReferenceMeanRemovalStageTitle}">
                                 <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.KDiagnostics.AuxiliaryMeanRemoved.Values}"
                                                      XStartValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryMeanRemoved.XStart}" XEndValue="{Binding ProcessingResult.KDiagnostics.AuxiliaryMeanRemoved.XEnd}"
                                                      XAxisTitle="샘플 번호" YAxisTitle="전압 (V)" />
@@ -437,12 +455,12 @@
                                                          XStartValue="{Binding SelectedSegment.CorrelationZoom.XStart}" XEndValue="{Binding SelectedSegment.CorrelationZoom.XEnd}"
                                                          XAxisTitle="{Binding SelectedSegment.CorrelationZoom.XAxisTitle}" YAxisTitle="{Binding SelectedSegment.CorrelationZoom.YAxisTitle}" />
                                 </GroupBox>
-                                <GroupBox Header="화면 9 · 거리별 Rayleigh Spectral Shift">
+                                <GroupBox Header="{Binding ProfileStageTitle}">
                                     <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.SpectralShiftProfile.Values}"
                                                          XStartValue="{Binding ProcessingResult.SpectralShiftProfile.XStart}" XEndValue="{Binding ProcessingResult.SpectralShiftProfile.XEnd}"
                                                          XAxisTitle="{Binding ProcessingResult.SpectralShiftProfile.XAxisTitle}" YAxisTitle="{Binding ProcessingResult.SpectralShiftProfile.YAxisTitle}" />
                                 </GroupBox>
-                                <GroupBox Header="화면 10 · 거리별 Strain 결과">
+                                <GroupBox Header="{Binding StrainStageTitle}">
                                     <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.StrainProfile.Values}"
                                                          XStartValue="{Binding ProcessingResult.StrainProfile.XStart}" XEndValue="{Binding ProcessingResult.StrainProfile.XEnd}"
                                                          XAxisTitle="{Binding ProcessingResult.StrainProfile.XAxisTitle}" YAxisTitle="{Binding ProcessingResult.StrainProfile.YAxisTitle}" />
@@ -461,7 +479,51 @@
                     </ScrollViewer>
                 </DockPanel>
             </TabItem>
+            <TabItem Header="최종 비교" AutomationProperties.AutomationId="FinalComparisonTab">
+                <Grid Margin="10" DataContext="{Binding FinalComparison}">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="160"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <WrapPanel>
+                        <ComboBox Width="190" ItemsSource="{Binding ComparisonModes}" SelectedIndex="{Binding ComparisonModeIndex}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.AutomationId="ComparisonMode"/>
+                        <TextBlock Text="기록명 (선택)" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                        <TextBox Width="180" Text="{Binding RecordName, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="ComparisonRecordName"/>
+                        <Button Content="현재 값 기록" Command="{Binding RecordCommand}" AutomationProperties.AutomationId="ComparisonRecord"/>
+                        <Button Content="Clear" Command="{Binding ClearCommand}" AutomationProperties.AutomationId="ComparisonClear"/>
+                        <TextBlock Text="{Binding CountDescription}" VerticalAlignment="Center" Margin="8,0,0,8" FontWeight="SemiBold"/>
+                    </WrapPanel>
+                    <DockPanel Grid.Row="1" LastChildFill="True">
+                        <Button DockPanel.Dock="Right" Content="저장된 결과 보기 (계산 없음)" Command="{Binding LoadNotebookCommand}" AutomationProperties.AutomationId="LoadNotebookTemperature"/>
+                        <TextBox Text="{Binding NotebookResultDirectory, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsBusy}" ToolTip="완료된 C# 261106 재현 결과 폴더" AutomationProperties.AutomationId="NotebookTemperatureResultDirectory"/>
+                    </DockPanel>
+                    <TextBlock Grid.Row="2" Text="{Binding RecordReadiness}" TextWrapping="Wrap" Foreground="#475569" Margin="0,0,0,8"/>
+                    <controls:StrainComparisonPlot Grid.Row="3" Entries="{Binding Entries}" Title="{Binding PlotTitle}" XAxisTitle="{Binding XAxisTitle}" YAxisTitle="{Binding YAxisTitle}" Margin="0,0,0,8" AutomationProperties.AutomationId="FinalComparisonPlot"/>
+                    <DataGrid Grid.Row="4" ItemsSource="{Binding Entries}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" EnableRowVirtualization="True" AutomationProperties.AutomationId="ComparisonLegend">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="Display Enable" Width="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding DisplayEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  ToolTip="체크한 기록만 그래프에 표시합니다."
+                                                  AutomationProperties.Name="Display Enable"
+                                                  AutomationProperties.AutomationId="{Binding Number, StringFormat=ComparisonDisplayEnable_{0}}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="색" Width="35"><DataGridTemplateColumn.CellTemplate><DataTemplate><Border Width="18" Height="5" Background="{Binding LineBrush}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                            <DataGridTextColumn Header="#" Binding="{Binding Number}" Width="35"/>
+                            <DataGridTextColumn Header="기록명" Binding="{Binding Name}" Width="110"/>
+                            <DataGridTextColumn Header="시각" Binding="{Binding RecordedTime}" Width="95"/>
+                            <DataGridTextColumn Header="Ref" Binding="{Binding Reference}" Width="*"/>
+                            <DataGridTextColumn Header="Signal" Binding="{Binding Signal}" Width="*"/>
+                            <DataGridTextColumn Header="품질 / 재현 조건" Binding="{Binding Quality}" Width="145"/>
+                            <DataGridTextColumn Header="표시 범위" Binding="{Binding Range}" Width="135"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock Grid.Row="5" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,8,0,0" AutomationProperties.AutomationId="ComparisonStatus"/>
+                </Grid>
+            </TabItem>
         </TabControl>
+        </Grid>
     </Grid>
         </TabItem>
     </TabControl>

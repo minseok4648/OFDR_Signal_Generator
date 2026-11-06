@@ -6,6 +6,7 @@ namespace OFDR_Signal_Core.Models
 {
     public sealed class StitchedAuxiliarySignal
     {
+        public ModeHopAnalysis Exclusion { get; internal set; }
         public double[] Values { get; internal set; }
         public int[] OriginalIndices { get; internal set; }
         public int[] JoinIndices { get; internal set; }

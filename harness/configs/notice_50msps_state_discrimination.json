@@ -1,0 +1,12 @@
+{
+  "Files": [
+    "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\NoticeData\\새 폴더\\50M_Sampling\\heating_1.csv",
+    "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\NoticeData\\새 폴더\\50M_Sampling\\heating_2.csv",
+    "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\NoticeData\\새 폴더\\50M_Sampling\\heating_3.csv",
+    "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\NoticeData\\새 폴더\\50M_Sampling\\cooling_1.csv",
+    "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\NoticeData\\새 폴더\\50M_Sampling\\cooling_2.csv"
+  ],
+  "States": ["Heating", "Heating", "Heating", "Cooling", "Cooling"],
+  "StartIndex": 550000,
+  "WindowSamples": 230000
+}

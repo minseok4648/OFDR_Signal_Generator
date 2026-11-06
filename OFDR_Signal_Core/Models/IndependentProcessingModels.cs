@@ -58,10 +58,16 @@ namespace OFDR_Signal_Core.Models
         [DataMember(Order = 27)] public double AnalysisStartMeters { get; set; } = 3.5;
         [DataMember(Order = 28)] public double AnalysisEndMeters { get; set; } = 8.7;
         [DataMember(Order = 29)] public double FftDbFloor { get; set; } = -140.0;
+        [DataMember(Order = 30)] public bool AllowFailedPhaseQcForDiagnostics { get; set; }
+        [DataMember(Order = 31)] public bool NotebookReproduction { get; set; }
+        [DataMember(Order = 32)] public int NotebookResampledSamples { get; set; } = 524288;
+        [DataMember(Order = 33)] public int NotebookAuxiliarySliceStart { get; set; } = 40;
+        [DataMember(Order = 34)] public int NotebookMeasurementSliceStart { get; set; } = 1;
 
         [OnDeserializing]
         private void InitializeDefaults(StreamingContext context)
         {
+            NotebookResampledSamples = 524288; NotebookAuxiliarySliceStart = 40; NotebookMeasurementSliceStart = 1;
             SchemaVersion = 3;
             MaxAuxNonmonotonicRatio = 1e-5;
             WindowFunction = "Hann";
@@ -182,6 +188,9 @@ namespace OFDR_Signal_Core.Models
         [DataMember(Order = 17)] public string FftProvider { get; set; }
         [DataMember(Order = 18)] public PreviewSeries StrainProfile { get; set; }
         [DataMember(Order = 19)] public PhysicalAxisCalibrationResult PhysicalAxis { get; set; }
+        [DataMember(Order = 26)] public bool IsDiagnosticAnalysis { get; set; }
+        [DataMember(Order = 27)] public bool InputPhaseQcPassed { get; set; }
+        [DataMember(Order = 28)] public string PhaseQcSummary { get; set; }
         [DataMember(Order = 20)] public PreviewSeries PreKReferenceSpectrum { get; set; }
         [DataMember(Order = 21)] public PreviewSeries PreKSignalSpectrum { get; set; }
         [DataMember(Order = 22)] public KLinearizationMetrics SignalKLinearization { get; set; }
@@ -196,6 +205,8 @@ namespace OFDR_Signal_Core.Models
         [IgnoreDataMember] public double[] SegmentPeakLags { get; set; }
         [IgnoreDataMember] public double[] SegmentCenterDistancesMeters { get; set; }
         [IgnoreDataMember] public IndependentOfdrProcessingConfig Config { get; set; }
+        [IgnoreDataMember] public NotebookTemperatureProfile NotebookProfile { get; set; }
+        [IgnoreDataMember] public NotebookTemperatureProfile NotebookReferenceProfile { get; set; }
 
         public void Dispose()
         {

@@ -1,0 +1,31 @@
+{
+  "experiment": "notice_thermal_profile_research",
+  "base_config": "harness/configs/notice_50msps_python_4096_128_opd200m_23m.json",
+  "reference_image": "C:/Users/sk-das3/AppData/Local/Temp/codex-clipboard-b4044f3c-8590-401f-950f-9ad1a25e4e24.png",
+  "reference_image_interpretation": "User confirmed no matching original file is available. Axes and numeric temperature-to-file mapping are unknown; image is a qualitative reference only.",
+  "groups": [
+    {"folder": "50M_sampling_GainUpdate", "exclude_files": ["ref.csv"], "role": "primary"},
+    {"folder": "50M_Sampling_2", "exclude_files": ["ref (3).csv"], "role": "validation"}
+  ],
+  "methods": ["ui_baseline", "lowpass_two_stage", "lowpass_direct", "lowpass_direct_lead100us", "continuous_lowpass_direct"],
+  "lowpass_cutoff_hz": 9000000,
+  "lowpass_butterworth_order": 4,
+  "filter_each_original_continuous_block": true,
+  "filter_edge_trim_samples": 64,
+  "lead_exclusion_s": 0.0001,
+  "continuous_relative_start_sample": 542000,
+  "continuous_sample_count": 230000,
+  "signal_channel_filtering": false,
+  "shared_reference_phase": false,
+  "plot_transform": "No arbitrary offsets, scaling, smoothing, clipping or fabricated temperature labels. Signed lag and physical GHz are saved separately.",
+  "exploratory_acceptance": {
+    "minimum_peak_correlation": 0.5,
+    "minimum_correlation_fraction_pairs": 0.6666666666666666,
+    "minimum_effect_ghz": 0.2,
+    "within_mad_multiplier": 3.0,
+    "minimum_same_sign_fraction": 0.8333333333333334,
+    "require_full_source_phase_qc": true,
+    "minimum_affected_length_m": 0.5,
+    "note": "Predeclared research criteria, not calibrated equipment thresholds; overlap windows are not independent repetitions. Exclude windows containing the strongest reference reflection when assessing distributed sensing."
+  }
+}

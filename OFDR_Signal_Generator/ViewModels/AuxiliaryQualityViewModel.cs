@@ -69,7 +69,7 @@ namespace OFDR_Signal_Generator.ViewModels
             source = recording; exclusion = analysis; threshold = appliedThreshold; pairedOriginal = original; MeasurementPlot = null;
             OnPropertyChanged(nameof(SourceDescription));
             stitched = null; SignalPlot = null; Quality = null; Summary = ""; EndText = ""; StartText = "0"; SelectedTab = 0;
-            Status = recording == null ? "먼저 원본 CSV를 읽으세요." : "문턱값 적용 완료. '제외 후 접합'을 누르세요. 문턱값을 재적용하면 이 결과는 초기화됩니다.";
+            Status = recording == null ? "먼저 원본 CSV를 읽으세요." : "제외 설정 적용 완료. '제외 후 접합'을 누르세요. 제외 설정을 재적용하면 이 결과는 초기화됩니다.";
             RefreshCommands();
         }
         public async Task StitchAsync()
@@ -79,7 +79,7 @@ namespace OFDR_Signal_Generator.ViewModels
             try
             {
                 stitched = null; SignalPlot = null; Quality = null; Summary = "";
-                log = new AuxiliaryQualityRunRecorder(source, threshold, new AuxiliaryInspectionSettings(), "aux_stitch"); ResultDirectory = log.DirectoryPath;
+                log = new AuxiliaryQualityRunRecorder(source, threshold, new AuxiliaryInspectionSettings(), "aux_stitch", exclusionTailSeconds: exclusion.ExclusionTailSeconds, exclusionLeadSeconds: exclusion.ExclusionLeadSeconds); ResultDirectory = log.DirectoryPath;
                 var recording = source; var ranges = exclusion; var token = cancellation.Token;
                 var result = await Task.Run(() => engine.Stitch(recording, ranges, token));
                 var preview = await Task.Run(() => engine.SignalPreview(result, 10000, token));
@@ -114,7 +114,7 @@ namespace OFDR_Signal_Generator.ViewModels
             try
             {
                 Quality = null;
-                log = new AuxiliaryQualityRunRecorder(source, threshold, settings, "aux_quality"); ResultDirectory = log.DirectoryPath;
+                log = new AuxiliaryQualityRunRecorder(source, threshold, settings, "aux_quality", exclusionTailSeconds: exclusion.ExclusionTailSeconds, exclusionLeadSeconds: exclusion.ExclusionLeadSeconds); ResultDirectory = log.DirectoryPath;
                 var signal = stitched; var token = cancellation.Token;
                 var result = await Task.Run(() => engine.Analyze(signal, settings, token));
                 token.ThrowIfCancellationRequested(); Quality = result; diagnosisSettings = settings; SelectedTab = 1;
@@ -154,7 +154,7 @@ namespace OFDR_Signal_Generator.ViewModels
             AuxiliaryCsvExportResult result = null;
             try
             {
-                log = new AuxiliaryQualityRunRecorder(recording, threshold, settings ?? new AuxiliaryInspectionSettings(), "aux_csv_export"); ResultDirectory = log.DirectoryPath;
+                log = new AuxiliaryQualityRunRecorder(recording, threshold, settings ?? new AuxiliaryInspectionSettings(), "aux_csv_export", exclusionTailSeconds: signal.Exclusion?.ExclusionTailSeconds ?? 0, exclusionLeadSeconds: signal.Exclusion?.ExclusionLeadSeconds ?? 0); ResultDirectory = log.DirectoryPath;
                 JsonContractSerializer.Write(Path.Combine(log.DirectoryPath, "export_request.json"), new AuxiliaryCsvExportRequest { CsvPath = Path.GetFullPath(path), EntireStitchedSignal = entireSignal, StartIndex = first, EndIndexExclusive = end, Overwrite = overwrite });
                 var token = cancellation.Token;
                 var reporter = new Progress<OperationProgress>(value => { if (IsBusy && !token.IsCancellationRequested) Status = string.Format(CultureInfo.InvariantCulture, "CSV 저장 중: {0:N0}/{1:N0} samples ({2:F0}%)", value.Completed, value.Total, value.Percent); });

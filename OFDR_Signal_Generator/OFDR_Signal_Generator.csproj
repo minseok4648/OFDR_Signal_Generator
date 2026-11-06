@@ -88,6 +88,8 @@
     <Compile Include="Infrastructure\ObservableObject.cs" />
     <Compile Include="Controls\ModeHopOverlayPlot.cs" />
     <Compile Include="Controls\AuxiliaryDiagnosticPlot.cs" />
+    <Compile Include="Controls\StrainComparisonPlot.cs" />
+    <Compile Include="ViewModels\FinalStrainComparisonViewModel.cs" />
     <Compile Include="Controls\PlotZoomWindow.cs" />
     <Compile Include="Controls\AuxiliaryQualityView.xaml.cs"><DependentUpon>AuxiliaryQualityView.xaml</DependentUpon></Compile>
     <Compile Include="ViewModels\AuxiliaryQualityViewModel.cs" />
@@ -99,6 +101,8 @@
     <Compile Include="Controls\SweepPreparationView.xaml.cs"><DependentUpon>SweepPreparationView.xaml</DependentUpon></Compile>
     <Compile Include="Validation\ModeHopGuiSmoke.cs" />
     <Compile Include="Validation\FourChannelGuiSmoke.cs" />
+    <Compile Include="Validation\NotebookTemperatureGuiSmoke.cs" />
+    <Compile Include="Validation\NotebookRawWorkflowGuiSmoke.cs" />
     <Compile Include="Infrastructure\RelayCommand.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>

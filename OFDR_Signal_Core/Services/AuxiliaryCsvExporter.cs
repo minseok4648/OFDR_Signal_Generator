@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -37,6 +38,16 @@ namespace OFDR_Signal_Core.Services
             {
                 var metadata = new AuxiliaryCsvExportMetadata { SourcePath = source.SourcePath, SourceSha256 = source.Sha256, SourceHeader = source.Header, SourceStartSeconds = source.SourceStartSeconds,
                     SampleIntervalSeconds = signal.SampleIntervalSeconds, ThresholdVoltage = threshold, EntireStitchedSignal = entireSignal, StartIndex = first, EndIndexExclusive = end,
+                    ExclusionTailSeconds = signal.Exclusion?.ExclusionTailSeconds ?? 0,
+                    ExclusionLeadSeconds = signal.Exclusion?.ExclusionLeadSeconds ?? 0,
+                    IgnoredSampleRanges = signal.Exclusion?.IgnoredSampleRanges?.Select(r => new ModeHopRange { Number = r.Number,
+                        StartIndex = source.FirstSampleIndex + r.StartIndex, EndIndexExclusive = source.FirstSampleIndex + r.EndIndexExclusive,
+                        StartSeconds = (source.FirstSampleIndex + r.StartIndex) * source.SampleIntervalSeconds,
+                        EndSeconds = (source.FirstSampleIndex + r.EndIndexExclusive) * source.SampleIntervalSeconds }).ToList(),
+                    IgnoredMeasurementRanges = signal.Exclusion?.IgnoredMeasurementRanges?.Select(r => new ModeHopRange { Number = r.Number,
+                        StartIndex = source.FirstSampleIndex + r.StartIndex, EndIndexExclusive = source.FirstSampleIndex + r.EndIndexExclusive,
+                        StartSeconds = (source.FirstSampleIndex + r.StartIndex) * source.SampleIntervalSeconds,
+                        EndSeconds = (source.FirstSampleIndex + r.EndIndexExclusive) * source.SampleIntervalSeconds }).ToList(),
                     RowCount = end - first, LastDiagnosis = diagnosis, LastDiagnosisSettings = diagnosisSettings, ExportedUtc = DateTime.UtcNow };
                 using (var file = new FileStream(partialCsv, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.SequentialScan))
                 using (var sha = SHA256.Create())

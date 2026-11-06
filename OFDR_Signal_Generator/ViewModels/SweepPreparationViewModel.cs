@@ -20,6 +20,7 @@ namespace OFDR_Signal_Generator.ViewModels
         private string refPath = @"C:\Project\OFDR\Datas\OFDR Raw data\NoticeData\tek0003ALL.csv";
         private string sigPath = @"C:\Project\OFDR\Datas\OFDR Raw data\NoticeData\tek0005ALL.csv";
         private bool busy, disposed;
+        private SweepSelectionMode selectionMode;
         private CancellationTokenSource cancellation;
         private TaskCompletionSource<bool> idle;
         private IReadOnlyList<SweepRange> sweeps;
@@ -27,20 +28,31 @@ namespace OFDR_Signal_Generator.ViewModels
         private ModeHopRecording activeSource;
         private double activeThreshold;
         private PreparedSweepData reference, signal;
+        private bool useModeHopExclusion = true;
+        public bool UseModeHopExclusion
+        {
+            get => useModeHopExclusion;
+            set { if (SetProperty(ref useModeHopExclusion, value)) InvalidateActive(); }
+        }
         public event Action<PreparedSweepData, PreparedSweepData> ApplyRequested;
+        public event Action NotebookPresetRequested;
         public Func<bool> WorkspaceIdle { get; set; } = () => true;
         public Func<double> ProcessingLimit { get; set; } = () => 1e-5;
+        public Func<bool> AllowDiagnostic { get; set; } = () => false;
+        public bool DiagnosticMode => AllowDiagnostic();
         public AuxiliaryQualityViewModel Quality => parent.AuxiliaryQuality;
         public SweepPreparationViewModel(ModeHopPreviewViewModel owner)
         {
             parent = owner;
-            parent.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(parent.ThresholdText)) OnPropertyChanged(nameof(ModeHopThresholdText)); };
+            parent.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(parent.ThresholdText)) OnPropertyChanged(nameof(ModeHopThresholdText)); if (e.PropertyName == nameof(parent.ExclusionTailText)) OnPropertyChanged(nameof(ModeHopExclusionTailText)); if (e.PropertyName == nameof(parent.ExclusionLeadText)) OnPropertyChanged(nameof(ModeHopExclusionLeadText)); };
             BrowseRefCommand = new RelayCommand(() => Browse("Ref"), () => Ready);
             BrowseSignalCommand = new RelayCommand(() => Browse("Signal"), () => Ready);
             LoadCommand = new RelayCommand(() => { _ = LoadForRoleAsync(ActiveRole, ActiveRole == "Ref" ? RefPath : SignalPath); }, () => Ready);
             ReviewCommand = new RelayCommand(() => { _ = ReviewAsync(); }, () => Ready && SelectedSweep != null && parent.LoadedRecording?.HasFourChannels == true);
             ConfirmCommand = new RelayCommand(() => { _ = ConfirmAsync(); }, () => Ready && activeSource != null && Quality.Quality != null);
             ApplyCommand = new RelayCommand(ApplyConfirmed, () => Ready && WorkspaceIdle() && CanAnalyzeConfirmed);
+            SetNotebookCropCommand = new RelayCommand(SetNotebookCrop, () => Ready && activeSource != null && Quality.Stitched != null);
+            NotebookPresetCommand = new RelayCommand(() => { NotebookPresetRequested?.Invoke(); Status = "261106 원본 비교 조건 적용: 첫 상승 엣지→파일 끝, CH2 제외 안 함, 노트북 진단 처리. 각 역할에서 검토→17M crop→위상 분석→확정을 진행하세요."; }, () => Ready && WorkspaceIdle());
             SaveRefCommand = new RelayCommand(() => Save("Ref"), () => Ready && reference != null);
             SaveSignalCommand = new RelayCommand(() => Save("Signal"), () => Ready && signal != null);
             ImportRefCommand = new RelayCommand(() => Import("Ref"), () => Ready);
@@ -55,6 +67,30 @@ namespace OFDR_Signal_Generator.ViewModels
         public string SignalPath { get => sigPath; set { if (SetProperty(ref sigPath, value) && ActiveRole == "Signal") InvalidateActive(); } }
         public string ActiveRole { get => role; set { if (value != "Ref" && value != "Signal") return; if (SetProperty(ref role, value)) InvalidateActive(); } }
         public string ModeHopThresholdText { get => parent.ThresholdText; set => parent.ThresholdText = value; }
+        public string ModeHopExclusionTailText { get => parent.ExclusionTailText; set => parent.ExclusionTailText = value; }
+        public string ModeHopExclusionLeadText { get => parent.ExclusionLeadText; set => parent.ExclusionLeadText = value; }
+        public bool UseRecordingStartAsSweepStart
+        {
+            get => selectionMode == SweepSelectionMode.RecordingStartToFirstEdge;
+            set { if (value) SetSelectionMode(SweepSelectionMode.RecordingStartToFirstEdge); }
+        }
+        public bool UseFirstRisingEdgeToRecordEnd
+        {
+            get => selectionMode == SweepSelectionMode.FirstEdgeToRecordingEnd;
+            set { if (value) SetSelectionMode(SweepSelectionMode.FirstEdgeToRecordingEnd); }
+        }
+        public bool UseCompleteSweeps
+        {
+            get => selectionMode == SweepSelectionMode.CompleteSweeps;
+            set { if (value) SetSelectionMode(SweepSelectionMode.CompleteSweeps); }
+        }
+        private void SetSelectionMode(SweepSelectionMode value)
+        {
+            if (!CanEdit || selectionMode == value) return;
+            selectionMode = value;
+            OnPropertyChanged(nameof(UseCompleteSweeps)); OnPropertyChanged(nameof(UseRecordingStartAsSweepStart)); OnPropertyChanged(nameof(UseFirstRisingEdgeToRecordEnd));
+            OnSourceLoaded(parent.LoadedRecording);
+        }
         public IReadOnlyList<string> Roles { get; } = new[] { "Ref", "Signal" };
         public IReadOnlyList<SweepRange> Sweeps { get => sweeps; private set => SetProperty(ref sweeps, value); }
         public SweepRange SelectedSweep { get => selectedSweep; set { if (SetProperty(ref selectedSweep, value)) InvalidateActive(); } }
@@ -63,9 +99,9 @@ namespace OFDR_Signal_Generator.ViewModels
         public PreparedSweepData PreparedSignal => signal;
         public string RefSummary => Describe(reference);
         public string SignalSummary => Describe(signal);
-        public string AnalysisBlockReason => PreparedSweepQcPolicy.PairBlockReason(reference?.Metadata, signal?.Metadata, ProcessingLimit());
+        public string AnalysisBlockReason => PreparedSweepQcPolicy.PairBlockReason(reference?.Metadata, signal?.Metadata, ProcessingLimit(), DiagnosticMode);
         public bool CanAnalyzeConfirmed => AnalysisBlockReason == null;
-        public string AnalysisReadiness => CanAnalyzeConfirmed ? "Ref/Signal의 확정 구간이 현재 분석 한계의 위상 QC를 통과했습니다. 기존 OFDR 분석에 적용할 수 있습니다."
+        public string AnalysisReadiness => CanAnalyzeConfirmed ? DiagnosticMode ? "상태 확인용 진단 분석에 적용합니다. QC 불합격 여부를 유지하고 FFT·상관을 확인합니다.\n" + (PreparedSweepQcPolicy.PairBlockReason(reference?.Metadata, signal?.Metadata, ProcessingLimit()) ?? "저장된 위상 QC는 통과 상태입니다.") : "Ref/Signal의 확정 구간이 현재 분석 한계의 위상 QC를 통과했습니다. 기존 OFDR 분석에 적용할 수 있습니다."
             : "분석 적용 차단\n" + AnalysisBlockReason + "\n불합격 구간을 조정한 뒤 다시 진단하세요. 진단 데이터의 확정·CSV 저장은 계속 사용할 수 있습니다.";
         public RelayCommand BrowseRefCommand { get; }
         public RelayCommand BrowseSignalCommand { get; }
@@ -73,6 +109,8 @@ namespace OFDR_Signal_Generator.ViewModels
         public RelayCommand ReviewCommand { get; }
         public RelayCommand ConfirmCommand { get; }
         public RelayCommand ApplyCommand { get; }
+        public RelayCommand SetNotebookCropCommand { get; }
+        public RelayCommand NotebookPresetCommand { get; }
         public RelayCommand SaveRefCommand { get; }
         public RelayCommand SaveSignalCommand { get; }
         public RelayCommand ImportRefCommand { get; }
@@ -81,9 +119,13 @@ namespace OFDR_Signal_Generator.ViewModels
         public void InvalidateActive() { activeSource = null; activeSweep = null; Quality.InvalidateDiagnosis(); RefreshCommands(); }
         public void OnSourceLoaded(ModeHopRecording source)
         {
-            InvalidateActive(); Sweeps = source?.HasFourChannels == true ? engine.DetectSweeps(source, CancellationToken.None) : null;
+            InvalidateActive(); Sweeps = source?.HasFourChannels == true ? engine.DetectSweeps(source, CancellationToken.None, selectionMode) : null;
             SelectedSweep = Sweeps != null && Sweeps.Count > 0 ? Sweeps[0] : null;
-            Status = source == null ? "원본을 읽으세요. 확정된 Ref/Signal 입력은 유지됩니다." : source.HasFourChannels ? "완전한 스윕 " + Sweeps.Count + "개. 선택 스윕 검토 후 아래 기존 위상 진단 화면에서 구간을 지정하세요." : "현재 파일은 기존 2채널 형식입니다. 스윕 입력 생성에는 CH1~4가 필요합니다.";
+            Status = source == null ? "원본을 읽으세요. 확정된 Ref/Signal 입력은 유지됩니다." : !source.HasFourChannels ? "현재 파일은 기존 2채널 형식입니다. 스윕 입력 생성에는 CH1~4가 필요합니다."
+                : Sweeps.Count == 0 ? UseFirstRisingEdgeToRecordEnd ? "CH1 상승 엣지가 없어 파일 끝까지 사용할 시작점을 정할 수 없습니다. CH1이 처음부터 High인 상태만으로는 상승 엣지로 판단하지 않습니다."
+                    : UseRecordingStartAsSweepStart ? "CH1 상승 에지가 없어 기록 시작 수동 스윕의 끝을 정할 수 없습니다." : "완전한 스윕이 없습니다. 사용 범위에서 '기록 시작 → 첫 상승 엣지' 또는 '첫 상승 엣지 → 파일 끝'을 선택할 수 있습니다."
+                : UseFirstRisingEdgeToRecordEnd ? "첫 CH1 상승 엣지부터 마지막 샘플까지를 사용 범위로 지정했습니다. 중간의 다른 상승 엣지도 포함하며, 한 주기의 완전한 스윕으로 자동 판정하지 않습니다. 아래에서 진단할 구간을 선택하세요."
+                    : "선택 가능 스윕 " + Sweeps.Count + "개" + (UseRecordingStartAsSweepStart ? " (S1: 기록 시작 수동 지정)" : "") + ". 선택 스윕 검토 후 아래 기존 위상 진단 화면에서 구간을 지정하세요.";
         }
         private void Browse(string target)
         {
@@ -108,7 +150,12 @@ namespace OFDR_Signal_Generator.ViewModels
             {
                 var threshold = parent.AppliedThreshold;
                 var part = await Task.Run(() => engine.Slice(source, sweep, token));
-                var exclusion = await Task.Run(() => new ModeHopPreviewEngine().Detect(part, new ModeHopSettings { ThresholdVoltage = threshold }, token));
+                var exclusion = await Task.Run(() => new ModeHopPreviewEngine().ClipToSamples(parent.AppliedExclusion, sweep.StartIndex, sweep.EndIndexExclusive, source.SampleIntervalSeconds, token));
+                if (!UseModeHopExclusion)
+                {
+                    if (part.InvalidSampleCount > 0) throw new InvalidOperationException("제외 없이 재현하려는 범위에 비유한 채널 값이 있습니다. 구간을 조정하세요.");
+                    exclusion = new ModeHopAnalysis { Ranges = new List<ModeHopRange>(), IgnoredMeasurementRanges = new List<ModeHopRange>(), IgnoredSampleRanges = new List<ModeHopRange>() };
+                }
                 token.ThrowIfCancellationRequested(); activeSource = source; activeSweep = sweep; activeThreshold = threshold;
                 Quality.UpdateSource(part, exclusion, threshold, source);
             });
@@ -125,6 +172,7 @@ namespace OFDR_Signal_Generator.ViewModels
             await RunAsync("sweep_confirm", async token =>
             {
                 var data = await Task.Run(() => engine.Prepare(source, sweep, target, stitched, diagnosis, settings, activeThreshold, token));
+                data.Metadata.ModeHopExclusionBypassed = !UseModeHopExclusion;
                 token.ThrowIfCancellationRequested(); SetPrepared(target, data);
                 var block = PreparedSweepQcPolicy.BlockReason(data.Metadata, target, ProcessingLimit());
                 Status = block == null ? target + " 확정: " + Describe(data) + " · CSV 저장 또는 기존 분석에 적용할 수 있습니다."
@@ -148,9 +196,21 @@ namespace OFDR_Signal_Generator.ViewModels
                 return;
             }
             ApplyRequested?.Invoke(reference, signal);
-            Status = "QC 통과 Ref/Signal 스윕을 분석 입력에 적용했습니다. 분석 실행 버튼을 누르세요.";
+            Status = (DiagnosticMode ? "진단용 Ref/Signal (QC 판정 유지)" : "QC 통과 Ref/Signal") + " 스윕을 분석 입력에 적용했습니다. 분석 실행 버튼을 누르세요.";
         }
-        private static string Describe(PreparedSweepData data) => data == null ? "미확정" : string.Format(CultureInfo.InvariantCulture, "{0} / S{1} · {2:N0} samples · {3}", Path.GetFileName(data.Metadata.SourcePath), data.Metadata.Sweep.Number, data.SampleCount, data.Metadata.Diagnosis?.Decision ?? "진단 정보 없음");
+        private void SetNotebookCrop()
+        {
+            var indices = Quality.Stitched?.OriginalIndices;
+            if (activeSource == null || indices == null) return;
+            var trigger = Array.FindIndex(activeSource.SweepTrigger, v => v > 3.0);
+            var firstOriginal = trigger + 15000; var first = Array.BinarySearch(indices, firstOriginal);
+            const int count = 17000000;
+            if (trigger < 0 || first < 0 || (long)first + count > indices.Length || indices[first + count - 1] != firstOriginal + count - 1)
+            { Status = "261106 crop을 만들 수 없습니다. '첫 상승 엣지 → 파일 끝'을 선택하고 CH2 제외 적용을 해제한 뒤 스윕을 다시 검토하세요."; return; }
+            Quality.SelectRange(first * activeSource.SampleIntervalSeconds, (first + count) * activeSource.SampleIntervalSeconds);
+            Status = string.Format(CultureInfo.InvariantCulture, "261106 crop: 원본 [{0:N0}, {1:N0}) · 17,000,000점. 아래 '선택 구간 위상 분석' 후 현재 역할로 확정하세요.", firstOriginal, firstOriginal + count);
+        }
+        private static string Describe(PreparedSweepData data) => data == null ? "미확정" : string.Format(CultureInfo.InvariantCulture, "{0} / S{1}{4} · {2:N0} samples · {3}", Path.GetFileName(data.Metadata.SourcePath), data.Metadata.Sweep.Number, data.SampleCount, data.Metadata.Diagnosis?.Decision ?? "진단 정보 없음", data.Metadata.Sweep.SelectionDescription.Length > 0 ? " (" + data.Metadata.Sweep.SelectionDescription + ")" : "");
         private async void Save(string target)
         {
             var data = target == "Ref" ? reference : signal;
@@ -191,6 +251,11 @@ namespace OFDR_Signal_Generator.ViewModels
             try
             {
                 configuration = configuration ?? new Dictionary<string, string>(); configuration["active_role"] = ActiveRole; configuration["ref_path"] = RefPath; configuration["signal_path"] = SignalPath; configuration["sweep"] = SelectedSweep?.ToString() ?? "";
+                configuration["use_recording_start_as_sweep_start"] = UseRecordingStartAsSweepStart.ToString();
+                configuration["sweep_selection_mode"] = selectionMode.ToString();
+                configuration["mode_hop_exclusion_tail_ms"] = ModeHopExclusionTailText;
+                configuration["mode_hop_exclusion_lead_ms"] = ModeHopExclusionLeadText;
+                configuration["mode_hop_exclusion_applied"] = UseModeHopExclusion.ToString();
                 log = new SweepRunRecorder(operation, configuration);
                 if (parent.LoadedRecording != null) log.Source(parent.LoadedRecording);
                 await action(cancellation.Token);
@@ -208,7 +273,8 @@ namespace OFDR_Signal_Generator.ViewModels
         {
             OnPropertyChanged(nameof(CanEdit));
             OnPropertyChanged(nameof(AnalysisBlockReason)); OnPropertyChanged(nameof(CanAnalyzeConfirmed)); OnPropertyChanged(nameof(AnalysisReadiness));
-            foreach (var command in new[] { BrowseRefCommand, BrowseSignalCommand, LoadCommand, ReviewCommand, ConfirmCommand, ApplyCommand, SaveRefCommand, SaveSignalCommand, ImportRefCommand, ImportSignalCommand }) command?.RaiseCanExecuteChanged();
+            OnPropertyChanged(nameof(DiagnosticMode));
+            foreach (var command in new[] { BrowseRefCommand, BrowseSignalCommand, LoadCommand, ReviewCommand, ConfirmCommand, ApplyCommand, SetNotebookCropCommand, NotebookPresetCommand, SaveRefCommand, SaveSignalCommand, ImportRefCommand, ImportSignalCommand }) command?.RaiseCanExecuteChanged();
         }
         public void Cancel() { cancellation?.Cancel(); }
         public Task CancelAndWaitAsync() { Cancel(); return idle?.Task ?? Task.CompletedTask; }

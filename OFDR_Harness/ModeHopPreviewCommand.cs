@@ -38,7 +38,7 @@ namespace OFDR_Harness
                     stage = "Golden acceptance";
                     if (recording.Sha256 != "c8837dc614ae7cf3702e51c1fe7de5307be79063a8ee6eeb09501e1425f25a34" ||
                         recording.SampleCount != 5000000 || Math.Abs(recording.DurationSeconds - 4) > 1e-12 ||
-                        settings.ThresholdVoltage != 1.8 || analysis.Ranges.Count != 755 || analysis.ExcludedSamples != 471902 ||
+                        settings.ThresholdVoltage != 1.8 || settings.ExclusionLeadSeconds != 0 || settings.ExclusionTailSeconds != 0 || analysis.Ranges.Count != 755 || analysis.ExcludedSamples != 471902 ||
                         viewport.Auxiliary.Values.Length > 10000 || viewport.Trigger.Values.Length > 10000)
                         throw new InvalidOperationException("Mode hop golden dataset/config/metrics mismatch.");
                 }
@@ -48,7 +48,7 @@ namespace OFDR_Harness
                     stage = "Auxiliary stitching and phase inspection";
                     string qualityConfig;
                     var inspection = options.TryGetValue("quality-config", out qualityConfig) ? JsonContractSerializer.Read<AuxiliaryInspectionSettings>(qualityConfig) : new AuxiliaryInspectionSettings();
-                    var qualityLog = new AuxiliaryQualityRunRecorder(recording, settings.ThresholdVoltage, inspection, "aux_quality_cli", resultsRoot);
+                    var qualityLog = new AuxiliaryQualityRunRecorder(recording, settings.ThresholdVoltage, inspection, "aux_quality_cli", resultsRoot, settings.ExclusionTailSeconds, settings.ExclusionLeadSeconds);
                     StitchedAuxiliarySignal stitched = null; AuxiliaryQualityResult quality = null; Exception qualityFailure = null;
                     try
                     {

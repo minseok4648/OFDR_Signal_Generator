@@ -4,6 +4,13 @@ using System.Runtime.Serialization;
 
 namespace OFDR_Signal_Core.Models
 {
+    public enum SweepSelectionMode
+    {
+        CompleteSweeps,
+        RecordingStartToFirstEdge,
+        FirstEdgeToRecordingEnd
+    }
+
     [DataContract]
     public sealed class SweepRange
     {
@@ -12,9 +19,25 @@ namespace OFDR_Signal_Core.Models
         [DataMember] public int EndIndexExclusive { get; set; }
         [DataMember] public double StartSeconds { get; set; }
         [DataMember] public double EndSeconds { get; set; }
+        [DataMember(EmitDefaultValue = false)] public bool StartSpecifiedAtRecordStart { get; set; }
+        [DataMember(EmitDefaultValue = false)] public bool EndSpecifiedAtRecordEnd { get; set; }
         public int SampleCount => EndIndexExclusive - StartIndex;
         public double DurationSeconds => EndSeconds - StartSeconds;
-        public override string ToString() => string.Format(System.Globalization.CultureInfo.InvariantCulture, "S{0}: {1:F7}–{2:F7} s ({3:N0} samples)", Number, StartSeconds, EndSeconds, SampleCount);
+        public string SelectionDescription => EndSpecifiedAtRecordEnd ? "첫 상승 엣지 → 파일 끝 직접 지정" : StartSpecifiedAtRecordStart ? "기록 시작 수동 지정" : "";
+        public override string ToString() => string.Format(System.Globalization.CultureInfo.InvariantCulture, "S{0}: {1:F7}–{2:F7} s ({3:N0} samples){4}", Number, StartSeconds, EndSeconds, SampleCount, SelectionDescription.Length > 0 ? " · " + SelectionDescription : "");
+    }
+
+    [DataContract]
+    public sealed class SavedCsvInputFiles
+    {
+        [DataMember] public string AuxiliaryCsvPath { get; set; }
+        [DataMember] public string AuxiliaryCsvSha256 { get; set; }
+        [DataMember] public string MeasurementPath { get; set; }
+        [DataMember] public string MeasurementSha256 { get; set; }
+        [DataMember] public AuxiliaryCsvExportMetadata OriginalExport { get; set; }
+        [DataMember] public bool PartialValidationInput { get; set; }
+        [DataMember] public int LoadedRows { get; set; }
+        [DataMember] public string Mapping { get; set; } = "CH4 selected at exactly the auxiliary CSV SourceIndex values; original acquisition indices retained.";
     }
 
     [DataContract]
@@ -33,14 +56,21 @@ namespace OFDR_Signal_Core.Models
         [DataMember] public double? KnownDisplacementMm { get; set; }
         [DataMember] public double SweepThresholdVoltage { get; set; } = 1.8;
         [DataMember] public double ModeHopThresholdVoltage { get; set; }
+        [DataMember] public double ModeHopExclusionTailSeconds { get; set; }
+        [DataMember] public double ModeHopExclusionLeadSeconds { get; set; }
+        [DataMember] public bool ModeHopExclusionBypassed { get; set; }
         [DataMember] public SweepRange Sweep { get; set; }
         [DataMember] public List<ModeHopRange> ExcludedRanges { get; set; }
+        [DataMember] public List<ModeHopRange> IgnoredMeasurementRanges { get; set; }
+        private List<ModeHopRange> ignoredSampleRanges;
+        [DataMember] public List<ModeHopRange> IgnoredSampleRanges { get => ignoredSampleRanges ?? IgnoredMeasurementRanges; set => ignoredSampleRanges = value; }
         [DataMember] public int SelectedStartIndex { get; set; }
         [DataMember] public int SelectedEndIndexExclusive { get; set; }
         [DataMember] public int RowCount { get; set; }
         [DataMember] public AuxiliaryQualityMetrics Diagnosis { get; set; }
         [DataMember] public AuxiliaryInspectionSettings DiagnosisSettings { get; set; }
         [DataMember] public string CsvSha256 { get; set; }
+        [DataMember] public SavedCsvInputFiles FileInputs { get; set; }
         [DataMember] public string TimeAxis { get; set; } = "Time_s is compressed selected time from zero; SourceTime_s is original acquisition time.";
     }
 
@@ -57,8 +87,11 @@ namespace OFDR_Signal_Core.Models
             var m = Metadata;
             if (m == null || m.SchemaVersion != 1 || (m.Role != "Ref" && m.Role != "Signal") || m.AuxiliaryChannel != 3 || m.MeasurementChannel != 4
                 || m.Sweep == null || m.Sweep.StartIndex < 0 || m.Sweep.EndIndexExclusive <= m.Sweep.StartIndex
+                || (m.Sweep.StartSpecifiedAtRecordStart && m.Sweep.EndSpecifiedAtRecordEnd)
                 || !ModeHopSettings.IsFinite(m.SampleIntervalSeconds) || m.SampleIntervalSeconds <= 0 || !ModeHopSettings.IsFinite(m.SourceStartSeconds)
                 || !ModeHopSettings.IsFinite(m.ModeHopThresholdVoltage) || m.SweepThresholdVoltage != 1.8
+                || !ModeHopSettings.IsFinite(m.ModeHopExclusionTailSeconds) || m.ModeHopExclusionTailSeconds < 0
+                || !ModeHopSettings.IsFinite(m.ModeHopExclusionLeadSeconds) || m.ModeHopExclusionLeadSeconds < 0
                 || string.IsNullOrWhiteSpace(m.SourcePath) || m.SourceSha256 == null || m.SourceSha256.Length != 64
                 || Auxiliary == null || Measurement == null || OriginalIndices == null || Auxiliary.Length < 4
                 || Measurement.Length != Auxiliary.Length || OriginalIndices.Length != Auxiliary.Length || m.RowCount != Auxiliary.Length
@@ -98,7 +131,7 @@ namespace OFDR_Signal_Core.Models
         private OfdrChannelData Channel(bool auxiliary)
         {
             var m = Metadata;
-            return new OfdrChannelData { SourcePath = m.SourcePath, SourceType = "PreparedSweep", MeasurementId = m.Role + ":" + System.IO.Path.GetFileNameWithoutExtension(m.SourcePath) + ":S" + m.Sweep.Number,
+            return new OfdrChannelData { SourcePath = m.FileInputs == null ? m.SourcePath : auxiliary ? m.FileInputs.AuxiliaryCsvPath : m.FileInputs.MeasurementPath, SourceType = m.FileInputs == null ? "PreparedSweep" : "SavedDiagnosticCsv", MeasurementId = m.Role + ":" + System.IO.Path.GetFileNameWithoutExtension(m.SourcePath) + (m.FileInputs == null ? ":S" + m.Sweep.Number : ":CSV"),
                 Repetition = "S" + m.Sweep.Number, ChannelNumber = auxiliary ? 3 : 4, SampleIntervalSeconds = m.SampleIntervalSeconds,
                 Values = auxiliary ? Auxiliary : Measurement, Preparation = m };
         }

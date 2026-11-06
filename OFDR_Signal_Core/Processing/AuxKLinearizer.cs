@@ -21,14 +21,15 @@ namespace OFDR_Signal_Core.Processing
             return LinearizeDetailed(reference, xPolarization, yPolarization, maximumNonmonotonicRatio, 0, cancellationToken, progress).Linearized;
         }
 
-        public DetailedKLinearizationResult LinearizeDetailed(double[] reference, double[] xPolarization, double[] yPolarization, double maximumNonmonotonicRatio, int maximumPreviewPoints, CancellationToken cancellationToken, IProgress<OperationProgress> progress = null)
+        public DetailedKLinearizationResult LinearizeDetailed(double[] reference, double[] xPolarization, double[] yPolarization, double maximumNonmonotonicRatio, int maximumPreviewPoints, CancellationToken cancellationToken, IProgress<OperationProgress> progress = null, bool allowFailedPhaseQcForDiagnostics = false)
         {
             if (reference == null || xPolarization == null || yPolarization == null) throw new ArgumentNullException("All three channels are required.");
             if (reference.Length < 4 || xPolarization.Length != reference.Length || yPolarization.Length != reference.Length) throw new ArgumentException("Channel lengths must match and contain at least four samples.");
             var n = reference.Length;
             var extracted = AuxiliaryPhaseExtractor.Extract(fft, reference, maximumPreviewPoints, cancellationToken, progress);
             var failure = extracted.Failure(maximumNonmonotonicRatio);
-            if (failure != null) throw new InvalidOperationException(failure.Replace("CH1", "Auxiliary"));
+            if (extracted.Metrics.AcceptedAnchorCount < 2 || extracted.Metrics.PhaseSpanRadians < 2 * Math.PI) throw new InvalidOperationException("Auxiliary phase span/anchors are insufficient even for diagnostic processing.");
+            if (failure != null && !allowFailedPhaseQcForDiagnostics) throw new InvalidOperationException(failure.Replace("CH1", "Auxiliary"));
             var phase = extracted.Phase;
             var anchors = extracted.Anchors;
             var accepted = extracted.Metrics.AcceptedAnchorCount;
@@ -77,7 +78,8 @@ namespace OFDR_Signal_Core.Processing
                         NonmonotonicRatio = ratio,
                         AcceptedAnchorCount = accepted,
                         SampleCount = n,
-                        SweepDirection = direction
+                        SweepDirection = direction,
+                        PhaseQcPassed = failure == null, PhaseQcFailureReason = failure?.Replace("CH1", "Auxiliary"), DiagnosticOnly = failure != null && allowFailedPhaseQcForDiagnostics
                     }
                 }
             };
@@ -91,7 +93,7 @@ namespace OFDR_Signal_Core.Processing
             double maximumNonmonotonicRatio,
             int maximumPreviewPoints,
             CancellationToken cancellationToken,
-            IProgress<OperationProgress> progress = null)
+            IProgress<OperationProgress> progress = null, bool allowFailedPhaseQcForDiagnostics = false)
         {
             if (referenceAuxiliary == null || referenceSignal == null || signalAuxiliary == null || signal == null)
                 throw new ArgumentNullException("기준/측정 sweep의 보조간섭계와 측정 신호가 모두 필요합니다.");
@@ -106,7 +108,7 @@ namespace OFDR_Signal_Core.Processing
                 maximumNonmonotonicRatio,
                 maximumPreviewPoints,
                 cancellationToken,
-                ScaleProgress(progress, "기준 sweep 보조간섭계", 0.0, 50.0));
+                ScaleProgress(progress, "기준 sweep 보조간섭계", 0.0, 50.0), allowFailedPhaseQcForDiagnostics);
             var referenceValues = referenceDetailed.Linearized.XPolarization;
             referenceDetailed.Linearized.Reference = null;
             referenceDetailed.Linearized.YPolarization = null;
@@ -118,7 +120,7 @@ namespace OFDR_Signal_Core.Processing
                 maximumNonmonotonicRatio,
                 maximumPreviewPoints,
                 cancellationToken,
-                ScaleProgress(progress, "측정 sweep 보조간섭계", 50.0, 100.0));
+                ScaleProgress(progress, "측정 sweep 보조간섭계", 50.0, 100.0), allowFailedPhaseQcForDiagnostics);
             var signalValues = signalDetailed.Linearized.XPolarization;
             signalDetailed.Linearized.Reference = null;
             signalDetailed.Linearized.YPolarization = null;

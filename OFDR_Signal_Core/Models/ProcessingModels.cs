@@ -34,6 +34,9 @@ namespace OFDR_Signal_Core.Models
     [DataContract]
     public sealed class KLinearizationMetrics
     {
+        [DataMember(Order = 10)] public bool? PhaseQcPassed { get; set; }
+        [DataMember(Order = 11)] public string PhaseQcFailureReason { get; set; }
+        [DataMember(Order = 12)] public bool DiagnosticOnly { get; set; }
         [DataMember(Order = 1)] public double PhaseSpanRadians { get; set; }
         [DataMember(Order = 2)] public double MedianPhaseIncrementRadians { get; set; }
         [DataMember(Order = 3)] public double NonmonotonicRatio { get; set; }

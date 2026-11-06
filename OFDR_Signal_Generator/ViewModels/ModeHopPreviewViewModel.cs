@@ -17,6 +17,7 @@ namespace OFDR_Signal_Generator.ViewModels
         public AuxiliaryQualityViewModel AuxiliaryQuality { get; } = new AuxiliaryQualityViewModel();
         public SweepPreparationViewModel SweepPreparation { get; }
         public ModeHopRecording LoadedRecording => recording;
+        public ModeHopAnalysis AppliedExclusion => analysis;
         public double AppliedThreshold => appliedSettings?.ThresholdVoltage ?? 1.8;
         public bool ManualSweepEnabled => recording?.HasFourChannels != true;
         public string SweepHint => ManualSweepEnabled ? "초기 1200 ms는 약 1.2초의 참고값입니다. 비워 두면 수동 경계 표시를 끕니다." : "4채널 입력: CH1 > 1.8 V 상승 에지로 스윕 경계를 표시합니다. 수동 스윕 시간·오프셋은 사용하지 않습니다.";
@@ -32,6 +33,8 @@ namespace OFDR_Signal_Generator.ViewModels
         private bool busy;
         private string sourcePath = "";
         private string thresholdText = "1.8";
+        private string exclusionTailText = "0";
+        private string exclusionLeadText = "0";
         private string sweepText = "1200";
         private string originText = "0";
         private int maximumPreviewPoints = 10000;
@@ -69,6 +72,8 @@ namespace OFDR_Signal_Generator.ViewModels
         public RelayCommand LoadSettingsCommand { get; }
         public string SourcePath { get => sourcePath; private set { SetProperty(ref sourcePath, value); RaiseCommands(); } }
         public string ThresholdText { get => thresholdText; set { if (SetProperty(ref thresholdText, value)) { AuxiliaryQuality.InvalidateDiagnosis(); SweepPreparation.InvalidateActive(); } } }
+        public string ExclusionTailText { get => exclusionTailText; set { if (SetProperty(ref exclusionTailText, value)) { AuxiliaryQuality.InvalidateDiagnosis(); SweepPreparation.InvalidateActive(); } } }
+        public string ExclusionLeadText { get => exclusionLeadText; set { if (SetProperty(ref exclusionLeadText, value)) { AuxiliaryQuality.InvalidateDiagnosis(); SweepPreparation.InvalidateActive(); } } }
         public string SweepText { get => sweepText; set => SetProperty(ref sweepText, value); }
         public string OriginText { get => originText; set => SetProperty(ref originText, value); }
         public string Status { get => status; private set => SetProperty(ref status, value); }
@@ -134,9 +139,9 @@ namespace OFDR_Signal_Generator.ViewModels
                 AuxiliaryQuality.UpdateSource(recording, analysis, settings.ThresholdVoltage);
                 SweepPreparation.OnSourceLoaded(recording);
                 OnPropertyChanged(nameof(ManualSweepEnabled)); OnPropertyChanged(nameof(SweepHint));
-                Metadata = string.Format(CultureInfo.InvariantCulture, "{0:N0} samples · {1:G9} μs · {2:G9} s · 원본 시작 {3:G9} s · SHA-256 {4}", loaded.SampleCount, loaded.SampleIntervalSeconds * 1e6, loaded.DurationSeconds, loaded.SourceStartSeconds, loaded.Sha256);
+                Metadata = string.Format(CultureInfo.InvariantCulture, "{0:N0} samples · {1:G9} μs · {2:G9} s · 원본 시작 {3:G9} s · 전 채널 inf 무시 {5:N0} samples · SHA-256 {4}", loaded.SampleCount, loaded.SampleIntervalSeconds * 1e6, loaded.DurationSeconds, loaded.SourceStartSeconds, loaded.Sha256, loaded.InvalidSampleCount);
                 RefreshSummary();
-                Progress = 100; Status = "전체 신호 읽기 완료. 붉은 음영은 CH2 High 제외 예정 구간입니다.";
+                Progress = 100; Status = "전체 신호 읽기 완료. 붉은 음영은 CH2 High·시작 전/종단 추가 제외·전 채널 inf 제외 구간입니다.";
             }
             catch (Exception ex) { failure = ex; Status = ex is OperationCanceledException ? "읽기를 취소했습니다." : "실패: " + ex.Message; }
             finally
@@ -204,7 +209,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
         private ModeHopSettings ReadSettings()
         {
-            var settings = new ModeHopSettings { ThresholdVoltage = Parse(ThresholdText), SweepDurationSeconds = string.IsNullOrWhiteSpace(SweepText) ? (double?)null : Parse(SweepText) / 1000, SweepOriginSeconds = Parse(OriginText) / 1000, MaximumPreviewPoints = maximumPreviewPoints };
+            var settings = new ModeHopSettings { ThresholdVoltage = Parse(ThresholdText), ExclusionLeadSeconds = Parse(ExclusionLeadText) / 1000, ExclusionTailSeconds = Parse(ExclusionTailText) / 1000, SweepDurationSeconds = string.IsNullOrWhiteSpace(SweepText) ? (double?)null : Parse(SweepText) / 1000, SweepOriginSeconds = Parse(OriginText) / 1000, MaximumPreviewPoints = maximumPreviewPoints };
             settings.Validate(); return settings;
         }
 
@@ -243,6 +248,8 @@ namespace OFDR_Signal_Generator.ViewModels
             var settings = JsonContractSerializer.Read<ModeHopSettings>(path); settings.Validate();
             maximumPreviewPoints = settings.MaximumPreviewPoints;
             ThresholdText = settings.ThresholdVoltage.ToString("G17", CultureInfo.InvariantCulture);
+            ExclusionTailText = (settings.ExclusionTailSeconds * 1000).ToString("G12", CultureInfo.InvariantCulture);
+            ExclusionLeadText = (settings.ExclusionLeadSeconds * 1000).ToString("G12", CultureInfo.InvariantCulture);
             SweepText = settings.SweepDurationSeconds.HasValue ? (settings.SweepDurationSeconds.Value * 1000).ToString("G17", CultureInfo.InvariantCulture) : "";
             OriginText = (settings.SweepOriginSeconds * 1000).ToString("G17", CultureInfo.InvariantCulture);
             Status = "설정을 읽었습니다. '설정 적용'을 누르세요.";
@@ -251,7 +258,7 @@ namespace OFDR_Signal_Generator.ViewModels
         private void RefreshSummary()
         {
             OnPropertyChanged(nameof(Ranges));
-            Summary = string.Format(CultureInfo.InvariantCulture, "제외 예정: {0:N0}개 구간 · {1:N0} samples · {2:F7} s · {3:F5}%  |  적용 문턱값 CH2 > {4:G9} V", analysis.Ranges.Count, analysis.ExcludedSamples, analysis.ExcludedSeconds, analysis.ExcludedPercent, appliedSettings.ThresholdVoltage);
+            Summary = string.Format(CultureInfo.InvariantCulture, "제외 예정: {0:N0}개 구간 · {1:N0} samples · {2:F7} s · {3:F5}%  |  CH2 > {4:G9} V · 시작 전 추가 제외 {7:G9} ms · 종단 추가 제외 {5:G9} ms · 전 채널 inf 무시 {6:N0} samples (High와 겹침 포함)", analysis.Ranges.Count, analysis.ExcludedSamples, analysis.ExcludedSeconds, analysis.ExcludedPercent, appliedSettings.ThresholdVoltage, appliedSettings.ExclusionTailSeconds * 1000, analysis.IgnoredSamples, appliedSettings.ExclusionLeadSeconds * 1000);
         }
 
         private void Begin() { cancellation?.Dispose(); cancellation = new CancellationTokenSource(); idleSignal = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously); IsBusy = true; Progress = 0; Status = "작업 중..."; }

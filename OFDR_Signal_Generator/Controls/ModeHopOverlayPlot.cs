@@ -53,9 +53,9 @@ namespace OFDR_Signal_Generator.Controls
             else if (Math.Abs(data.StartSeconds - plot.requestedStart) < 1e-10 && Math.Abs(data.EndSeconds - plot.requestedEnd) < 1e-10) plot.navigationRequested = false;
             if (data.StartSeconds == plot.fullStart && data.EndSeconds == plot.fullEnd)
             {
-                plot.auxiliaryMin = data.Auxiliary.Values.Min(); plot.auxiliaryMax = data.Auxiliary.Values.Max();
-                plot.triggerMin = Math.Min(data.Trigger.Values.Min(), data.ThresholdVoltage); plot.triggerMax = Math.Max(data.Trigger.Values.Max(), data.ThresholdVoltage);
-                if (data.SweepTrigger != null) { plot.triggerMin = Math.Min(plot.triggerMin, data.SweepTrigger.Values.Min()); plot.triggerMax = Math.Max(plot.triggerMax, data.SweepTrigger.Values.Max()); }
+                plot.auxiliaryMin = data.Auxiliary.Values.DefaultIfEmpty(0).Min(); plot.auxiliaryMax = data.Auxiliary.Values.DefaultIfEmpty(0).Max();
+                plot.triggerMin = Math.Min(data.Trigger.Values.DefaultIfEmpty(0).Min(), data.ThresholdVoltage); plot.triggerMax = Math.Max(data.Trigger.Values.DefaultIfEmpty(0).Max(), data.ThresholdVoltage);
+                if (data.SweepTrigger?.Values.Length > 0) { plot.triggerMin = Math.Min(plot.triggerMin, data.SweepTrigger.Values.Min()); plot.triggerMax = Math.Max(plot.triggerMax, data.SweepTrigger.Values.Max()); }
                 Pad(ref plot.auxiliaryMin, ref plot.auxiliaryMax); Pad(ref plot.triggerMin, ref plot.triggerMax);
             }
         }

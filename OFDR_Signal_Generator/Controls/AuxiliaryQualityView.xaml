@@ -6,7 +6,7 @@
         <StackPanel>
             <TextBlock Text="접합 후 보조간섭계 품질 검토" FontSize="23" FontWeight="Bold"/>
             <TextBlock Text="{Binding SourceDescription}" Foreground="#0369A1"/>
-            <TextBlock Margin="0,5,0,10" TextWrapping="Wrap" Foreground="#475569" Text="트리거 High 샘플을 제거하고 나머지를 그대로 접합합니다. 시간축은 제거 시간이 압축된 환산 시간이며, 실제 취득 시간은 원본 인덱스로 보존됩니다."/>
+            <TextBlock Margin="0,5,0,10" TextWrapping="Wrap" Foreground="#475569" Text="트리거 High·시작 전/종단 추가 제외·전 채널 inf 구간을 제거하고 나머지를 그대로 접합합니다. CH1~CH4 중 어느 채널에 inf가 있어도 CH3·CH4에 같은 제외 인덱스를 적용하며, 실제 취득 시간은 원본 인덱스로 보존됩니다."/>
             <WrapPanel>
                 <Button Content="1. 제외 후 접합" Command="{Binding StitchCommand}" AutomationProperties.AutomationId="AuxStitch"/>
                 <StackPanel Width="145" Margin="0,0,10,0"><TextBlock Text="분석 시작 (접합 ms)"/><TextBox IsEnabled="{Binding IsEditable}" Text="{Binding StartText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="AuxStart"/></StackPanel>

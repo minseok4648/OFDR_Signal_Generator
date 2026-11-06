@@ -1,0 +1,12 @@
+{
+  "ReferencePath": "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\NoticeData\\새 폴더\\100M_Sampling\\tek0030ALL.csv",
+  "SignalPath": "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\NoticeData\\새 폴더\\100M_Sampling\\tek0031ALL.csv",
+  "StartIndices": [2500000, 10200000, 17500000],
+  "WindowSamples": 81920,
+  "ExpectedSampleRate": 100000000,
+  "PhysicalPathMeters": 200,
+  "CenterWavelengthNm": 1550,
+  "SweepRateNmPerSecond": 50,
+  "GroupIndex": 1.4682,
+  "AcquisitionState": "User-confirmed repeated measurements at the same maintained temperature; no intended temperature change. Exact temperature and absolute optical-frequency alignment not measured."
+}

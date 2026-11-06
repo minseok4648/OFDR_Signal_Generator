@@ -66,8 +66,9 @@ namespace OFDR_Signal_Core.Processing
             ValidateInput(input);
             config = config ?? new IndependentOfdrProcessingConfig();
             ValidateConfig(config);
-            var qcBlock = PreparedSweepQcPolicy.InputBlockReason(input, config.MaxAuxNonmonotonicRatio);
+            var qcBlock = PreparedSweepQcPolicy.InputBlockReason(input, config.MaxAuxNonmonotonicRatio, config.AllowFailedPhaseQcForDiagnostics);
             if (qcBlock != null) throw new InvalidOperationException("분석 전 위상 QC 차단:\n" + qcBlock);
+            if (config.NotebookReproduction) return new NotebookPreparedPairEngine().Run(input, config, token, progress);
             if (config.SegmentSize > Math.Min(input.Auxiliary.Values.Length, input.SignalAuxiliary.Values.Length) / 2) throw new ArgumentOutOfRangeException(nameof(config.SegmentSize), "Segment 크기는 양의 거리 FFT 구간보다 작아야 합니다.");
 
             var total = Stopwatch.StartNew();
@@ -83,7 +84,7 @@ namespace OFDR_Signal_Core.Processing
 
             stage.Restart();
             var detailed = linearizer.LinearizeSweepsDetailed(input.Auxiliary.Values, input.Reference.Values, input.SignalAuxiliary.Values, input.Signal.Values,
-                config.MaxAuxNonmonotonicRatio, config.MaxPreviewPoints, token, ScaleProgress(progress, "K-linearization", 8.0, 35.0));
+                config.MaxAuxNonmonotonicRatio, config.MaxPreviewPoints, token, ScaleProgress(progress, "K-linearization", 8.0, 35.0), config.AllowFailedPhaseQcForDiagnostics);
             performance.Add(Metric("k_linearization_sec", stage.Elapsed.TotalSeconds, "s"));
 
             stage.Restart();
@@ -191,6 +192,9 @@ namespace OFDR_Signal_Core.Processing
 
             var result = new IndependentOfdrProcessingResult
             {
+                IsDiagnosticAnalysis = config.AllowFailedPhaseQcForDiagnostics,
+                InputPhaseQcPassed = detailed.ReferenceMetrics.PhaseQcPassed == true && detailed.SignalMetrics.PhaseQcPassed == true,
+                PhaseQcSummary = string.Format(CultureInfo.InvariantCulture, "{0} · Ref 거부 {1:P6} / Signal 거부 {2:P6} · 기준 {3:P6}", config.AllowFailedPhaseQcForDiagnostics ? "상태 확인용 진단 결과 (QC 불합격이 통과로 바뀌지 않음)" : "일반 분석", detailed.ReferenceMetrics.NonmonotonicRatio, detailed.SignalMetrics.NonmonotonicRatio, config.MaxAuxNonmonotonicRatio),
                 AuxiliaryId = input.Auxiliary.MeasurementId,
                 SignalAuxiliaryId = input.SignalAuxiliary.MeasurementId,
                 ReferenceId = input.Reference.MeasurementId,
@@ -232,6 +236,7 @@ namespace OFDR_Signal_Core.Processing
             if (result == null) throw new ArgumentNullException(nameof(result));
             if (result.ReferenceSpectrumValues == null || result.SignalSpectrumValues == null) throw new InvalidOperationException("Segment 확인용 spectrum 데이터가 해제되었습니다.");
             if (segmentIndex < 0 || segmentIndex >= result.SegmentStarts.Length) throw new ArgumentOutOfRangeException(nameof(segmentIndex));
+            if (result.Config.NotebookReproduction) return new NotebookPreparedPairEngine().Inspect(result, segmentIndex);
 
             var start = result.SegmentStarts[segmentIndex];
             var stages = BuildSegmentStages(result.ReferenceSpectrumValues, result.SignalSpectrumValues, start, result.Config);

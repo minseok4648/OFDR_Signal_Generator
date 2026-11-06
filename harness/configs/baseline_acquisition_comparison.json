@@ -1,0 +1,12 @@
+{
+  "DataRoot": "C:\\Project\\OFDR\\Datas\\OFDR Raw data",
+  "HighHistory": "OFDR_Signal_Generator/bin/Debug/harness/results/20261105_091456_235_prepared_ofdr_analysis_76283c",
+  "LowHistory": "OFDR_Signal_Generator/bin/Debug/harness/results/20261105_090952_295_prepared_ofdr_analysis_cea163",
+  "GoldenDirectory": "harness/results/20260828_dual_aux_csharp_series_regression",
+  "WindowSamples": 81920,
+  "MaximumScopeSampleRate": 20000000,
+  "CenterWavelengthNm": 1550,
+  "SweepRateNmPerSecond": 50,
+  "NoticePhysicalPathMeters": 200,
+  "GroupIndex": 1.4682
+}

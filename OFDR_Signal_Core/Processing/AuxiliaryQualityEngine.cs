@@ -23,7 +23,7 @@ namespace OFDR_Signal_Core.Processing
             }
             CopyKept(source, cursor, source.SampleCount, values, indices, joins, ref output, token);
             if (output != remaining) throw new ArgumentException("제외 샘플 수와 구간 목록이 일치하지 않습니다.");
-            return new StitchedAuxiliarySignal { Values = values, OriginalIndices = indices, JoinIndices = joins.ToArray(), SampleIntervalSeconds = source.SampleIntervalSeconds };
+            return new StitchedAuxiliarySignal { Exclusion = exclusion, Values = values, OriginalIndices = indices, JoinIndices = joins.ToArray(), SampleIntervalSeconds = source.SampleIntervalSeconds };
         }
 
         private static void CopyKept(ModeHopRecording source, int first, int end, double[] values, int[] indices, List<int> joins, ref int output, CancellationToken token)
@@ -48,7 +48,9 @@ namespace OFDR_Signal_Core.Processing
         {
             settings.Validate(); token.ThrowIfCancellationRequested();
             var endSeconds = settings.EndSeconds ?? signal.DurationSeconds;
-            if (endSeconds > signal.DurationSeconds || settings.StartSeconds >= signal.DurationSeconds) throw new ArgumentException("분석 범위가 접합 신호를 벗어났습니다.");
+            var endTolerance = Math.Max(signal.SampleIntervalSeconds * 1e-9, 8 * 2.2204460492503131e-16 * Math.Max(1, signal.DurationSeconds));
+            if (endSeconds > signal.DurationSeconds + endTolerance || settings.StartSeconds >= signal.DurationSeconds) throw new ArgumentException("분석 범위가 접합 신호를 벗어났습니다.");
+            endSeconds = Math.Min(endSeconds, signal.DurationSeconds);
             // Half-open sample selection by sample times, with roundoff tolerance at exact boundaries.
             var first = (int)Math.Ceiling(settings.StartSeconds / signal.SampleIntervalSeconds - 1e-9);
             var end = Math.Min(signal.Values.Length, (int)Math.Ceiling(endSeconds / signal.SampleIntervalSeconds - 1e-9));

@@ -1,0 +1,64 @@
+{
+  "experiment": "notice_50msps_python_4096_128_coil100m_opd200m_23m",
+  "data_root": "C:\\Project\\OFDR\\Datas\\OFDR Raw data\\NoticeData\\새 폴더",
+  "folders": [
+    "50M_Sampling",
+    "50M_Sampling_2",
+    "50M_sampling_3",
+    "50M_sampling_GainUpdate"
+  ],
+  "channel_mapping": {
+    "CH1": "sweep_start",
+    "CH2": "mode_hop_trigger",
+    "CH3": "auxiliary",
+    "CH4": "measurement"
+  },
+  "sample_interval_s": 2e-08,
+  "selection": "first CH1 rising edge to recording end; remove CH2 High plus 0.3ms tail and invalid CH4; concatenate retained indices",
+  "trigger_threshold_v": 1.8,
+  "mode_hop_exclusion_tail_s": 0.0003,
+  "segment_size": 4096,
+  "segment_hop": 128,
+  "window": "Hann, symmetric, applied only after full distance FFT segmentation",
+  "zero_padding_factor": 16,
+  "auxiliary_path_difference_m": 200.0,
+  "auxiliary_path_interpretation": "User confirmed 100m one-way coil; approximate round-trip travel-path difference 200m. Short arm and distance offset remain uncalibrated.",
+  "auxiliary_group_index": 1.4682,
+  "measurement_cable_m": 23.0,
+  "distance_geometry_factor": 1.0,
+  "distance_offset_m": 0.0,
+  "maximum_spectral_shift_ghz": 180.0,
+  "max_nonmonotonic_ratio": 1e-05,
+  "allow_failed_phase_qc_for_diagnostics": true,
+  "masked_auxiliary_infinity_policy": "Permit CH3 infinity only if already removed by the unchanged CH2/CH4 exclusion mask. Never interpolate or retain a nonfinite auxiliary sample. The current C# raw reader rejects CH3 infinity before masking; record this input compatibility difference.",
+  "k_resampling": "UI-equivalent two-stage linear interpolation using record-high phase anchors, separate CH3 per sweep, common relative phase span",
+  "correlation": "circular normalized cross-correlation of mean-removed local-spectrum magnitudes; real positive maximum; 3-point fractional peak",
+  "center_wavelength_nm": 1550.0,
+  "strain_coefficient": 0.78,
+  "strain_is_provisional_and_temperature_cross_sensitive": true,
+  "report_regions_m": [
+    [
+      0,
+      5
+    ],
+    [
+      5,
+      10
+    ],
+    [
+      10,
+      15
+    ],
+    [
+      15,
+      20
+    ],
+    [
+      20,
+      23
+    ]
+  ],
+  "native_mkl_dll": "build_verify_50ms_states/libMathNetNumericsMKL.dll",
+  "golden_policy": "No production processing changes. Independent native FFT, known spectral translation, same-input zero, known range tone, real reverse-pair controls. Legacy 5.5-6.5m plateau is not ground truth for this thermal acquisition.",
+  "auxiliary_coil_one_way_m": 100.0
+}

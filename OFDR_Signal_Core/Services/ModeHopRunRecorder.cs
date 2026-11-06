@@ -33,12 +33,16 @@ namespace OFDR_Signal_Core.Services
                 ManagedMemoryBytes = GC.GetTotalMemory(false), Sha256 = recording?.Sha256, Header = recording?.Header,
                 SampleCount = recording?.SampleCount ?? 0, SampleIntervalSeconds = recording?.SampleIntervalSeconds ?? 0,
                 SourceStartSeconds = recording?.SourceStartSeconds ?? 0, DurationSeconds = recording?.DurationSeconds ?? 0,
-                ExcludedSamples = analysis?.ExcludedSamples ?? 0, ExcludedSeconds = analysis?.ExcludedSeconds ?? 0,
+                IgnoredMeasurementSamples = recording?.InvalidMeasurementCount ?? 0,
+                IgnoredSamples = recording?.InvalidSampleCount ?? 0,
+                ExcludedSamples = analysis?.ExcludedSamples ?? 0, ExcludedSeconds = analysis?.ExcludedSeconds ?? 0, ExclusionLeadSeconds = analysis?.ExclusionLeadSeconds ?? 0, ExclusionTailSeconds = analysis?.ExclusionTailSeconds ?? 0,
                 ExcludedPercent = analysis?.ExcludedPercent ?? 0, RegionCount = analysis?.Ranges.Count ?? 0,
                 AuxiliaryPreviewPoints = viewport?.Auxiliary.Values.Length ?? 0, TriggerPreviewPoints = viewport?.Trigger.Values.Length ?? 0
             };
             JsonContractSerializer.Write(Path.Combine(DirectoryPath, "metrics.json"), metrics);
             if (analysis != null) JsonContractSerializer.Write(Path.Combine(DirectoryPath, "artifacts", "excluded_ranges.json"), analysis.Ranges);
+            if (analysis?.IgnoredMeasurementRanges != null) JsonContractSerializer.Write(Path.Combine(DirectoryPath, "artifacts", "ignored_ch4_ranges.json"), analysis.IgnoredMeasurementRanges);
+            if (analysis?.IgnoredSampleRanges != null) JsonContractSerializer.Write(Path.Combine(DirectoryPath, "artifacts", "ignored_all_channel_ranges.json"), analysis.IgnoredSampleRanges);
             File.WriteAllText(Path.Combine(DirectoryPath, "summary.md"),
                 "# Mode hop preview\n\n- Status: " + status + "\n- Stage: " + stage + "\n- Samples: " + metrics.SampleCount +
                 "\n- Regions: " + metrics.RegionCount + "\n- Excluded samples: " + metrics.ExcludedSamples +
@@ -51,7 +55,7 @@ namespace OFDR_Signal_Core.Services
     public sealed class ModeHopRunConfig
     {
         [DataMember] public string SourcePath { get; set; }
-        [DataMember] public string TriggerRule { get; set; } = "CH2 > ThresholdVoltage; half-open sample ranges; no padding";
+        [DataMember] public string TriggerRule { get; set; } = "Finite CH2 > ThresholdVoltage; extend pulse start backward by ExclusionLeadSeconds and pulse end forward by ExclusionTailSeconds (ceil to samples); union CH1/CH2/CH3/CH4 +/-Inf indices without additional padding; union overlapping/touching ranges; clip to record; half-open sample ranges; CH3/CH4 retain identical source indices; CH1 edges require adjacent finite samples";
         [DataMember] public ModeHopSettings Settings { get; set; }
     }
 
@@ -67,12 +71,16 @@ namespace OFDR_Signal_Core.Services
         [DataMember] public string Sha256 { get; set; }
         [DataMember] public Dictionary<string, string> Header { get; set; }
         [DataMember] public int SampleCount { get; set; }
+        [DataMember] public int IgnoredMeasurementSamples { get; set; }
+        [DataMember] public int IgnoredSamples { get; set; }
         [DataMember] public double SampleIntervalSeconds { get; set; }
         [DataMember] public double SourceStartSeconds { get; set; }
         [DataMember] public double DurationSeconds { get; set; }
         [DataMember] public int RegionCount { get; set; }
         [DataMember] public long ExcludedSamples { get; set; }
         [DataMember] public double ExcludedSeconds { get; set; }
+        [DataMember] public double ExclusionTailSeconds { get; set; }
+        [DataMember] public double ExclusionLeadSeconds { get; set; }
         [DataMember] public double ExcludedPercent { get; set; }
         [DataMember] public int AuxiliaryPreviewPoints { get; set; }
         [DataMember] public int TriggerPreviewPoints { get; set; }

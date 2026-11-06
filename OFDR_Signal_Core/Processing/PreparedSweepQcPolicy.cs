@@ -14,12 +14,12 @@ namespace OFDR_Signal_Core.Processing
         public static string Describe(PreparedSweepMetadata data, string role)
         {
             if (data == null) return role + " · CH3 보조간섭계: 확정한 진단 입력이 없습니다.";
-            return string.Format(CultureInfo.InvariantCulture, "{0} · {1} / S{2} · CH3 보조간섭계 · 접합 [{3:G9}, {4:G9}) ms · {5:N0} samples",
-                role, Path.GetFileName(data.SourcePath), data.Sweep?.Number ?? 0,
+            return string.Format(CultureInfo.InvariantCulture, "{0} · {1} / {2} · CH3 보조간섭계 · 접합 [{3:G9}, {4:G9}) ms · {5:N0} samples",
+                role, Path.GetFileName(data.SourcePath), data.FileInputs == null ? "S" + (data.Sweep?.Number ?? 0) : "저장 CSV 구간",
                 data.SelectedStartIndex * data.SampleIntervalSeconds * 1000, data.SelectedEndIndexExclusive * data.SampleIntervalSeconds * 1000, data.RowCount);
         }
 
-        public static string BlockReason(PreparedSweepMetadata data, string role, double processingLimit)
+        public static string BlockReason(PreparedSweepMetadata data, string role, double processingLimit, bool allowFailedPhaseQcForDiagnostics = false)
         {
             var context = Describe(data, role);
             if (data == null) return context;
@@ -27,12 +27,17 @@ namespace OFDR_Signal_Core.Processing
             var diagnosis = data.Diagnosis; var settings = data.DiagnosisSettings; var phase = diagnosis?.Phase;
             if (data.Role != role || data.AuxiliaryChannel != 3 || data.MeasurementChannel != 4)
                 return context + "\n진단 입력의 역할 또는 채널이 일치하지 않습니다.";
+            // Whole/prefix saved CSVs may not carry QC for this exact range; production extraction will check it.
+            if (data.FileInputs != null && diagnosis == null && settings == null) return null;
             if (phase == null || settings == null || !ValidLimit(settings.MaximumNonmonotonicRatio))
                 return context + "\n위상 진단 정보가 없습니다. 이 구간의 위상 분석을 다시 실행하세요.";
             if (diagnosis.SelectedStartIndex != data.SelectedStartIndex || diagnosis.SelectedEndIndexExclusive != data.SelectedEndIndexExclusive || phase.SampleCount != data.RowCount)
                 return context + "\n저장된 위상 진단과 현재 선택 구간이 다릅니다. 다시 진단하세요.";
             if (!ValidLimit(phase.NonmonotonicRatio) || !ModeHopSettings.IsFinite(phase.PhaseSpanRadians))
                 return context + "\n위상 진단 수치가 유효하지 않습니다. 다시 진단하세요.";
+            if (phase.AcceptedAnchorCount < 2 || phase.PhaseSpanRadians < 2 * Math.PI)
+                return context + "\n위상 span 또는 단조 앵커가 부족합니다. 선택 구간을 조정한 뒤 다시 진단하세요.";
+            if (allowFailedPhaseQcForDiagnostics && (diagnosis.Decision == "PASS_PHASE_QC" || diagnosis.Decision == "REJECT_PHASE_QC")) return null;
             var limits = "진단 한계 " + Percent(settings.MaximumNonmonotonicRatio) + " / 분석 한계 " + Percent(processingLimit);
             if (phase.NonmonotonicRatio > Math.Min(settings.MaximumNonmonotonicRatio, processingLimit))
                 return context + "\n위상 QC 불합격: 앵커 거부 " + Percent(phase.NonmonotonicRatio) + " · " + limits;
@@ -43,17 +48,17 @@ namespace OFDR_Signal_Core.Processing
             return null;
         }
 
-        public static string PairBlockReason(PreparedSweepMetadata reference, PreparedSweepMetadata signal, double processingLimit)
+        public static string PairBlockReason(PreparedSweepMetadata reference, PreparedSweepMetadata signal, double processingLimit, bool allowFailedPhaseQcForDiagnostics = false)
         {
-            var failures = new[] { BlockReason(reference, "Ref", processingLimit), BlockReason(signal, "Signal", processingLimit) }.Where(s => s != null).ToArray();
+            var failures = new[] { BlockReason(reference, "Ref", processingLimit, allowFailedPhaseQcForDiagnostics), BlockReason(signal, "Signal", processingLimit, allowFailedPhaseQcForDiagnostics) }.Where(s => s != null).ToArray();
             return failures.Length == 0 ? null : string.Join("\n", failures);
         }
 
-        public static string InputBlockReason(IndependentOfdrInput input, double processingLimit)
+        public static string InputBlockReason(IndependentOfdrInput input, double processingLimit, bool allowFailedPhaseQcForDiagnostics = false)
         {
             if (input == null) return "분석 입력이 없습니다.";
             if (new[] { input.Auxiliary, input.Reference, input.SignalAuxiliary, input.Signal }.All(c => c?.Preparation == null)) return null;
-            return PairBlockReason(input.Reference?.Preparation, input.Signal?.Preparation, processingLimit);
+            return PairBlockReason(input.Reference?.Preparation, input.Signal?.Preparation, processingLimit, allowFailedPhaseQcForDiagnostics);
         }
 
         private static bool ValidLimit(double value) => ModeHopSettings.IsFinite(value) && value >= 0 && value <= 1;

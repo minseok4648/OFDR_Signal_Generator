@@ -19,7 +19,11 @@ namespace OFDR_Signal_Core.Services
         public ModeHopRecording ReadUntilSecondSweepStart(string path, CancellationToken token)
         { return ReadInternal(path, token, null, true); }
 
-        private ModeHopRecording ReadInternal(string path, CancellationToken token, IProgress<OperationProgress> progress, bool firstSweepOnly)
+        // Validation-only bounded read; the normal GUI reader still validates the entire record.
+        public ModeHopRecording ReadUntilFirstSweepEnd(string path, CancellationToken token, bool useRecordingStart)
+        { return ReadInternal(path, token, null, true, useRecordingStart); }
+
+        private ModeHopRecording ReadInternal(string path, CancellationToken token, IProgress<OperationProgress> progress, bool firstSweepOnly, bool useRecordingStart = false)
         {
             token.ThrowIfCancellationRequested();
             var before = new FileInfo(path);
@@ -63,6 +67,8 @@ namespace OFDR_Signal_Core.Services
                     var auxiliary = new double[count];
                     var sweepTrigger = sweepColumn < 0 ? null : new double[count];
                     var measurement = measurementColumn < 0 ? null : new double[count];
+                    var invalidMeasurement = new List<int>();
+                    var invalidSamples = new List<int>();
                     var risingEdges = 0;
                     var row = 0;
                     double firstTime = 0, previousTime = double.NegativeInfinity;
@@ -78,26 +84,30 @@ namespace OFDR_Signal_Core.Services
                         if (time < previousTime) throw new InvalidDataException("CSV 시간축 역행: " + lineNumber + "행");
                         if (row == 0) firstTime = time;
                         previousTime = time;
-                        trigger[row] = Number(cells[triggerColumn], lineNumber);
-                        auxiliary[row] = Number(cells[auxiliaryColumn], lineNumber);
+                        trigger[row] = ChannelValue(cells[triggerColumn], lineNumber);
+                        auxiliary[row] = ChannelValue(cells[auxiliaryColumn], lineNumber);
+                        var invalid = double.IsInfinity(trigger[row]) || double.IsInfinity(auxiliary[row]);
                         if (sweepTrigger != null)
                         {
-                            sweepTrigger[row] = Number(cells[sweepColumn], lineNumber);
-                            measurement[row] = Number(cells[measurementColumn], lineNumber);
-                            if (row > 0 && sweepTrigger[row - 1] <= 1.8 && sweepTrigger[row] > 1.8) risingEdges++;
+                            sweepTrigger[row] = ChannelValue(cells[sweepColumn], lineNumber);
+                            measurement[row] = ChannelValue(cells[measurementColumn], lineNumber);
+                            if (double.IsInfinity(measurement[row])) invalidMeasurement.Add(row);
+                            invalid |= double.IsInfinity(sweepTrigger[row]) || double.IsInfinity(measurement[row]);
+                            if (row > 0 && ModeHopSettings.IsRisingEdge(sweepTrigger[row - 1], sweepTrigger[row], 1.8)) risingEdges++;
                         }
+                        if (invalid) invalidSamples.Add(row);
                         row++;
-                        if (firstSweepOnly && risingEdges == 2) break;
+                        if (firstSweepOnly && risingEdges == (useRecordingStart ? 1 : 2)) break;
                         if ((row & 0x1ffff) == 0) progress?.Report(new OperationProgress { Stage = "Tek CSV 읽기", Completed = row, Total = count, Percent = 90.0 * row / count });
                     }
                     if (!firstSweepOnly && row != count) throw new InvalidDataException("데이터 행 수가 Record Length와 다릅니다: " + row + " / " + count);
                     if (firstSweepOnly)
                     {
-                        if (risingEdges < 2) throw new InvalidDataException("완전한 스윕을 위한 CH1 상승 에지가 두 개 필요합니다.");
+                        if (risingEdges < (useRecordingStart ? 1 : 2)) throw new InvalidDataException(useRecordingStart ? "기록 시작 수동 스윕의 끝을 위한 CH1 상승 에지가 필요합니다." : "완전한 스윕을 위한 CH1 상승 에지가 두 개 필요합니다.");
                         Array.Resize(ref trigger, row); Array.Resize(ref auxiliary, row);
                         Array.Resize(ref sweepTrigger, row); Array.Resize(ref measurement, row);
                     }
-                    result = new ModeHopRecording { SourcePath = Path.GetFullPath(path), Header = header, SourceStartSeconds = firstTime, SampleIntervalSeconds = interval, Trigger = trigger, Auxiliary = auxiliary, SweepTrigger = sweepTrigger, Measurement = measurement, IsPartialRead = firstSweepOnly };
+                    result = new ModeHopRecording { SourcePath = Path.GetFullPath(path), Header = header, SourceStartSeconds = firstTime, SampleIntervalSeconds = interval, Trigger = trigger, Auxiliary = auxiliary, SweepTrigger = sweepTrigger, Measurement = measurement, InvalidMeasurementIndices = invalidMeasurement.ToArray(), InvalidSampleIndices = invalidSamples.ToArray(), IsPartialRead = firstSweepOnly };
                 }
                 token.ThrowIfCancellationRequested();
                 stream.Position = 0;
@@ -125,6 +135,19 @@ namespace OFDR_Signal_Core.Services
             string value;
             if (!header.TryGetValue(name, out value)) throw new InvalidDataException("필수 헤더 누락: " + name);
             return Number(value, 0);
+        }
+
+        private static bool IsInfinityToken(string text)
+        {
+            if (text.StartsWith("+", StringComparison.Ordinal) || text.StartsWith("-", StringComparison.Ordinal)) text = text.Substring(1);
+            return text.Equals("inf", StringComparison.OrdinalIgnoreCase) || text.Equals("infinity", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static double ChannelValue(string text, int line)
+        {
+            text = text.Trim();
+            if (IsInfinityToken(text)) return text.StartsWith("-", StringComparison.Ordinal) ? double.NegativeInfinity : double.PositiveInfinity;
+            return Number(text, line);
         }
 
         private static double Number(string text, int line)

@@ -1,0 +1,16 @@
+{
+  "ReferenceFile": "tek0002ALL.csv",
+  "MeasurementFiles": ["tek0003ALL.csv", "tek0004ALL.csv", "tek0005ALL.csv"],
+  "Labels": ["60C", "80C", "100C"],
+  "TriggerVoltage": 3.0,
+  "StartOffsetSamples": 15000,
+  "InputSamples": 17000000,
+  "AuxiliarySliceStart": 40,
+  "MeasurementSliceStart": 1,
+  "ResampledSamples": 524288,
+  "SegmentSize": 4096,
+  "SegmentStep": 50,
+  "ZeroPadFactor": 8,
+  "FirstBin": 0,
+  "StopBin": 262144
+}

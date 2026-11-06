@@ -31,9 +31,16 @@ namespace OFDR_Harness
                     case "run": return Run(options, false);
                     case "run-csv": return RunCsv(options);
                     case "run-pair": return RunPair(options);
+                    case "reproduce-notebook-temperature": return NotebookTemperatureCommand.Run(options);
                     case "preview-mode-hop": return ModeHopPreviewCommand.Run(options);
                     case "inspect-mode-hop": options["inspect"] = "true"; return ModeHopPreviewCommand.Run(options);
                     case "validate-four-channel-samples": return FourChannelSampleValidation.Run(options);
+                    case "validate-manual-start-sweep": return ManualSweepSampleValidation.Run(options);
+                    case "validate-ch4-infinity-sample": return Ch4InfinitySampleValidation.Run(options);
+                    case "diagnose-acquisition-comparison": return AcquisitionComparisonCommand.Run(options);
+                    case "diagnose-partial-acquisition": return PartialAcquisitionCommand.Run(options);
+                    case "diagnose-state-discrimination": return StateDiscriminationCommand.Run(options);
+                    case "run-diagnosed-files-sample": return DiagnosedFilesSampleCommand.Run(options);
                     case "evaluate": return Run(options, true);
                     default: Console.Error.WriteLine("Unknown command: " + command); return 2;
                 }
@@ -409,6 +416,7 @@ namespace OFDR_Harness
 
         private static int PrintUsage()
         {
+            Console.WriteLine("OFDR_Harness reproduce-notebook-temperature [--input folder] [--config path] [--results folder] [--experiment id]");
             Console.WriteLine("OFDR_Harness scan [--input folder] [--manifest path]");
             Console.WriteLine("OFDR_Harness convert [--input folder] [--output folder] [--set id] [--overwrite]");
             Console.WriteLine("OFDR_Harness convert-channel --input isf [--output folder] [--overwrite]");
@@ -416,6 +424,9 @@ namespace OFDR_Harness
             Console.WriteLine("OFDR_Harness run-csv --csv path [--config path] [--results folder]");
             Console.WriteLine("OFDR_Harness run-pair --aux reference_ch1 --sig-aux signal_ch1 --ref path --sig path [--channel 2|3] [--config path] [--results folder]");
             Console.WriteLine("OFDR_Harness evaluate [--input folder] [--config path] [--results folder]");
+            Console.WriteLine("OFDR_Harness diagnose-acquisition-comparison [--input data_root] [--config path] [--results folder] [--cancel-after-ms n]");
+            Console.WriteLine("OFDR_Harness diagnose-partial-acquisition [--config path] [--results folder] [--cancel-after-ms n]");
+            Console.WriteLine("OFDR_Harness diagnose-state-discrimination --config path [--results folder] [--cancel-after-ms n]");
             Console.WriteLine("OFDR_Harness preview-mode-hop --csv path [--config path] [--results folder] [--golden]");
             Console.WriteLine("OFDR_Harness inspect-mode-hop --csv path [--config preview_config] [--quality-config path] [--results folder] [--golden]");
             return 0;

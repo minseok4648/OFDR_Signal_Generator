@@ -11,11 +11,11 @@ namespace OFDR_Signal_Core.Services
     {
         private readonly Stopwatch watch = Stopwatch.StartNew();
         public string DirectoryPath { get; }
-        public AuxiliaryQualityRunRecorder(ModeHopRecording recording, double threshold, AuxiliaryInspectionSettings settings, string kind, string resultsRoot = null)
+        public AuxiliaryQualityRunRecorder(ModeHopRecording recording, double threshold, AuxiliaryInspectionSettings settings, string kind, string resultsRoot = null, double exclusionTailSeconds = 0, double exclusionLeadSeconds = 0)
         {
             DirectoryPath = Path.GetFullPath(Path.Combine(resultsRoot ?? Path.Combine("harness", "results"), DateTime.Now.ToString("yyyyMMdd_HHmmss_fff") + "_" + kind + "_" + Guid.NewGuid().ToString("N").Substring(0, 6)));
             Directory.CreateDirectory(DirectoryPath);
-            JsonContractSerializer.Write(Path.Combine(DirectoryPath, "config.json"), new AuxiliaryQualityConfig { SourcePath = recording.SourcePath, Sha256 = recording.Sha256, Header = recording.Header, ThresholdVoltage = threshold, Settings = settings });
+            JsonContractSerializer.Write(Path.Combine(DirectoryPath, "config.json"), new AuxiliaryQualityConfig { SourcePath = recording.SourcePath, Sha256 = recording.Sha256, Header = recording.Header, ThresholdVoltage = threshold, ExclusionLeadSeconds = exclusionLeadSeconds, ExclusionTailSeconds = exclusionTailSeconds, IgnoredMeasurementSamples = recording.InvalidMeasurementCount, IgnoredSamples = recording.InvalidSampleCount, Settings = settings });
             JsonContractSerializer.Write(Path.Combine(DirectoryPath, "metrics.json"), new AuxiliaryQualityRunMetrics { Status = "RUNNING" });
             File.WriteAllText(Path.Combine(DirectoryPath, "summary.md"), "# Auxiliary quality experiment\n\nRUNNING; incomplete runs require investigation.\n");
         }
@@ -38,8 +38,12 @@ namespace OFDR_Signal_Core.Services
         [DataMember] public string Sha256 { get; set; }
         [DataMember] public System.Collections.Generic.Dictionary<string, string> Header { get; set; }
         [DataMember] public double ThresholdVoltage { get; set; }
+        [DataMember] public double ExclusionTailSeconds { get; set; }
+        [DataMember] public double ExclusionLeadSeconds { get; set; }
+        [DataMember] public int IgnoredMeasurementSamples { get; set; }
+        [DataMember] public int IgnoredSamples { get; set; }
         [DataMember] public AuxiliaryInspectionSettings Settings { get; set; }
-        [DataMember] public string Operation { get; set; } = "Remove CH2 High samples then concatenate unchanged CH3 samples; select by compressed time; no phase stitching correction";
+        [DataMember] public string Operation { get; set; } = "Remove finite CH2 High with pre-pulse lead and post-pulse tail samples plus any-channel +/-Inf samples; union overlaps, clip to selected sweep; concatenate unchanged CH3 samples; select by compressed time; no phase stitching correction";
     }
     [DataContract] public sealed class AuxiliaryQualityRunMetrics
     {
