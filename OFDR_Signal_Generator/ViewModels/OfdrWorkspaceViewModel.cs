@@ -61,6 +61,25 @@ namespace OFDR_Signal_Generator.ViewModels
         private IndependentOfdrProcessingResult processingResult;
         public FinalStrainComparisonViewModel FinalComparison { get; }
         private bool notebookReproduction;
+        private bool stageComparisonEnabled;
+        public StageOptionsViewModel Stages { get; } = new StageOptionsViewModel();
+        public bool StageComparisonEnabled
+        {
+            get => stageComparisonEnabled;
+            set
+            {
+                if (!SetProperty(ref stageComparisonEnabled, value)) return;
+                if (value) { NotebookReproduction = false; AllowFailedPhaseQcForDiagnostics = true; UsePhysicalAxes = false; }
+                OnPropertyChanged(nameof(NotebookModeDescription));
+            }
+        }
+        public RelayCommand StageLegacyPresetCommand { get; private set; }
+        public RelayCommand StageNotebookPresetCommand { get; private set; }
+        private void ApplyStagePreset(bool notebook)
+        {
+            StageComparisonEnabled = true; Stages.SetPreset(notebook); SegmentSize = 4096; SegmentHop = 50; ZeroPadFactor = 8;
+            SelectedWindowFunction = "Hann"; NormalizeCorrelation = !notebook;
+        }
         public bool NotebookReproduction
         {
             get => notebookReproduction;
@@ -69,6 +88,7 @@ namespace OFDR_Signal_Generator.ViewModels
                 if (!SetProperty(ref notebookReproduction, value)) return;
                 if (value)
                 {
+                    StageComparisonEnabled = false;
                     SegmentSize = 4096; SegmentHop = 50; ZeroPadFactor = 8; SelectedWindowFunction = "Hann";
                     UsePhysicalAxes = false; NormalizeCorrelation = false; AllowFailedPhaseQcForDiagnostics = true;
                 }
@@ -78,7 +98,7 @@ namespace OFDR_Signal_Generator.ViewModels
         public int NotebookResampledSamples { get; set; } = 524288;
         public int NotebookAuxiliarySliceStart { get; set; } = 40;
         public int NotebookMeasurementSliceStart { get; set; } = 1;
-        public string NotebookModeDescription => NotebookReproduction
+        public string NotebookModeDescription => StageComparisonEnabled ? "다음 실행: 단계별 진단 · " + Stages.Build().Description : NotebookReproduction
             ? "확정 Raw crop 직접 처리 · AUX DC 제거 없음 · 독립 span · 전체 Hann · local Window 없음 · 전체 lag 탐색 · 미교정 진단"
             : "일반 처리 · AUX 평균 제거/QC · 공통 상대 phase span · 거리 segment Window";
         private SegmentCorrelationView selectedSegment;
@@ -124,6 +144,9 @@ namespace OFDR_Signal_Generator.ViewModels
 
         public OfdrWorkspaceViewModel()
         {
+            StageLegacyPresetCommand = new RelayCommand(() => ApplyStagePreset(false), () => !IsBusy);
+            StageNotebookPresetCommand = new RelayCommand(() => ApplyStagePreset(true), () => !IsBusy);
+            Stages.PropertyChanged += (s, e) => OnPropertyChanged(nameof(NotebookModeDescription));
             FinalComparison = new FinalStrainComparisonViewModel(() => ProcessingResult, () => !IsBusy);
             AuxiliaryPath = ExistingOrEmpty(Path.Combine(DefaultDataRoot, "0_0mm0000CH1.isf"));
             SignalAuxiliaryPath = ExistingOrEmpty(Path.Combine(DefaultDataRoot, "0_4mm0000CH1.isf"));
@@ -229,7 +252,9 @@ namespace OFDR_Signal_Generator.ViewModels
         public double ProgressPercent { get { return progressPercent; } private set { SetProperty(ref progressPercent, value); } }
         public string ProgressText { get { return progressText; } private set { SetProperty(ref progressText, value); } }
         public string InputValidationText { get { return inputValidationText; } private set { SetProperty(ref inputValidationText, value); } }
-        public IndependentOfdrProcessingResult ProcessingResult { get { return processingResult; } private set { if (SetProperty(ref processingResult, value)) { OnPropertyChanged(nameof(HasResult)); OnPropertyChanged(nameof(CalibrationSummary)); RaiseLargeGraphProperties(); RaiseCommandStates(); } } }
+        public IndependentOfdrProcessingResult ProcessingResult { get { return processingResult; } private set { if (SetProperty(ref processingResult, value)) { OnPropertyChanged(nameof(HasResult)); OnPropertyChanged(nameof(CalibrationSummary)); OnPropertyChanged(nameof(ReferencePhaseIncrementSummary)); OnPropertyChanged(nameof(SignalPhaseIncrementSummary)); RaiseLargeGraphProperties(); RaiseCommandStates(); } } }
+        public string ReferencePhaseIncrementSummary => ProcessingResult?.NotebookProfile != null ? "기준 위상 증가량 중앙값: 미산출 · 위상 증가량 그래프 참조" : "기준 위상 증가량 중앙값: " + ProcessingResult?.KLinearization?.MedianPhaseIncrementRadians.ToString("G9") + " rad";
+        public string SignalPhaseIncrementSummary => ProcessingResult?.NotebookProfile != null ? "측정 위상 증가량 중앙값: 미산출 · 위상 증가량 그래프 참조" : "측정 위상 증가량 중앙값: " + ProcessingResult?.SignalKLinearization?.MedianPhaseIncrementRadians.ToString("G9") + " rad";
         public bool HasResult { get { return ProcessingResult != null; } }
         public SegmentCorrelationView SelectedSegment { get { return selectedSegment; } private set { if (SetProperty(ref selectedSegment, value)) { OnPropertyChanged(nameof(PeakDescription)); OnPropertyChanged(nameof(CorrelationPeakMarkers)); OnPropertyChanged(nameof(CorrelationZoomPeakMarkers)); RaiseLargeGraphProperties(); } } }
         public IEnumerable<int> CorrelationPeakMarkers { get { return SelectedSegment == null ? new int[0] : new[] { SelectedSegment.PeakIndex }; } }
@@ -238,20 +263,20 @@ namespace OFDR_Signal_Generator.ViewModels
         {
             get
             {
-                if (SelectedSegment != null && ProcessingResult?.Config?.NotebookReproduction == true)
-                    return string.Format(CultureInfo.InvariantCulture, "노트북 진단 · Segment {0:N0} · FFT 시작 bin {1:N0} · lag {2:+0.000;-0.000;0.000} sample · 상관 {3:G6}", SelectedSegment.SegmentIndex, SelectedSegment.SegmentStartFftBin, SelectedSegment.PeakLagBins, SelectedSegment.PeakMagnitude);
+                if (SelectedSegment != null && ProcessingResult?.NotebookProfile != null)
+                    return string.Format(CultureInfo.InvariantCulture, "lag 진단 · Segment {0:N0} · FFT 시작 bin {1:N0} · lag {2:+0.000;-0.000;0.000} sample · 상관 {3:G6}", SelectedSegment.SegmentIndex, SelectedSegment.SegmentStartFftBin, SelectedSegment.PeakLagBins, SelectedSegment.PeakMagnitude);
                 return SelectedSegment == null ? "Segment 처리 후 peak 정보가 표시됩니다."
                     : string.Format(CultureInfo.InvariantCulture, "Segment {0:N0} · 중심 {1:F6} m · Peak {2:+0.000;-0.000;0.000} bin · {3:+0.000;-0.000;0.000} GHz · {4:+0.0;-0.0;0.0} με · 상관 {5:G6}",
                         SelectedSegment.SegmentIndex, SelectedSegment.SegmentCenterDistanceMeters, SelectedSegment.PeakLagBins,
                         SelectedSegment.PeakSpectralShiftGHz, SelectedSegment.PeakStrainMicrostrain, SelectedSegment.PeakMagnitude);
             }
         }
-        public string KLinearizationFlowDescription => ProcessingResult?.Config?.NotebookReproduction == true
+        public string KLinearizationFlowDescription => ProcessingResult?.Config?.StageComparisonEnabled == true ? ProcessingResult.Config.StageComparison.Description : ProcessingResult?.Config?.NotebookReproduction == true
             ? "노트북 비교: 확정 crop에 채널 offset을 적용하고 각 AUX를 DC 제거 없이 Hilbert/unwrap/위상 정렬합니다. 각 sweep endpoint span에 독립 보간하며 공통 span 정렬을 하지 않습니다."
             : "각 sweep의 보조간섭계를 독립 위상 추출·보간한 뒤 더 짧은 공통 상대 위상 범위와 같은 샘플 수로 Ref/Sig를 맞춥니다.";
-        public string ProfileStageTitle => ProcessingResult?.Config?.NotebookReproduction == true ? "화면 9 · 프로파일별 상관 lag (노트북 비교)" : "화면 9 · 거리별 Rayleigh Spectral Shift";
-        public string StrainStageTitle => ProcessingResult?.Config?.NotebookReproduction == true ? "화면 10 · strain 미산출 (미교정 lag 진단)" : "화면 10 · 거리별 Strain 결과";
-        public string ReferenceMeanRemovalStageTitle => ProcessingResult?.Config?.NotebookReproduction == true ? "기준 AUX 평균 제거 미적용 (노트북 조건)" : "기준 보조간섭계 평균 제거";
+        public string ProfileStageTitle => ProcessingResult?.NotebookProfile != null ? "화면 9 · 프로파일별 상관 lag (단계별/노트북 비교)" : "화면 9 · 거리별 Rayleigh Spectral Shift";
+        public string StrainStageTitle => ProcessingResult?.NotebookProfile != null ? "화면 10 · strain 미산출 (미교정 lag 진단)" : "화면 10 · 거리별 Strain 결과";
+        public string ReferenceMeanRemovalStageTitle => ProcessingResult?.Config?.StageComparisonEnabled == true ? "기준 AUX DC " + (ProcessingResult.Config.StageComparison.RemoveAuxiliaryMean ? "제거" : "유지") : ProcessingResult?.Config?.NotebookReproduction == true ? "기준 AUX 평균 제거 미적용 (노트북 조건)" : "기준 보조간섭계 평균 제거";
 
         public string CalibrationSummary
         {
@@ -260,7 +285,7 @@ namespace OFDR_Signal_Generator.ViewModels
                 if (ProcessingResult == null || ProcessingResult.PhysicalAxis == null)
                     return "거리/Strain 환산은 처리 후 표시됩니다. 중심 파장 1550 nm와 strain 계수 0.78은 장비·광섬유 값으로 확인하세요.";
                 var value = ProcessingResult.PhysicalAxis;
-                if (ProcessingResult.Config?.NotebookReproduction == true) return value.Note;
+                if (ProcessingResult.NotebookProfile != null) return value.Note;
                 return string.Format(CultureInfo.InvariantCulture,
                     "거리 간격 {0:G9} m/FFT bin · Spectral shift {1:G9} GHz/lag · Strain {2:G9} με/lag · sweep {3:F3} GHz · 인가 변형 기준 {4:F3} με",
                     value.DistanceMetersPerFftBin, value.SpectralShiftGHzPerLag, value.StrainMicrostrainPerLag, value.SweepSpanGHz, value.ExpectedAppliedStrainMicrostrain.HasValue ? value.ExpectedAppliedStrainMicrostrain.Value.ToString("F3", CultureInfo.InvariantCulture) : "미지정");
@@ -411,6 +436,7 @@ namespace OFDR_Signal_Generator.ViewModels
                 var config = new IndependentOfdrProcessingConfig
                 {
                     NotebookReproduction = NotebookReproduction,
+                    StageComparisonEnabled = StageComparisonEnabled, StageComparison = Stages.Build(),
                     NotebookResampledSamples = NotebookResampledSamples,
                     NotebookAuxiliarySliceStart = NotebookAuxiliarySliceStart,
                     NotebookMeasurementSliceStart = NotebookMeasurementSliceStart,
@@ -615,6 +641,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
         private void RaiseCommandStates()
         {
+            StageLegacyPresetCommand?.RaiseCanExecuteChanged(); StageNotebookPresetCommand?.RaiseCanExecuteChanged();
             FinalComparison?.Refresh();
             UseSavedCsvFilesCommand?.RaiseCanExecuteChanged();
             ModeHopPreview.SweepPreparation.RefreshCommands(); UseLegacyInputsCommand?.RaiseCanExecuteChanged();

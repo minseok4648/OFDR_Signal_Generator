@@ -31,6 +31,7 @@ namespace OFDR_Signal_Generator.ViewModels
         private TaskCompletionSource<bool> idleSignal;
         private bool disposed;
         private bool busy;
+        private bool useModeHopExclusion = true;
         private string sourcePath = "";
         private string thresholdText = "1.8";
         private string exclusionTailText = "0";
@@ -72,6 +73,16 @@ namespace OFDR_Signal_Generator.ViewModels
         public RelayCommand LoadSettingsCommand { get; }
         public string SourcePath { get => sourcePath; private set { SetProperty(ref sourcePath, value); RaiseCommands(); } }
         public string ThresholdText { get => thresholdText; set { if (SetProperty(ref thresholdText, value)) { AuxiliaryQuality.InvalidateDiagnosis(); SweepPreparation.InvalidateActive(); } } }
+        public bool UseModeHopExclusion
+        {
+            get => useModeHopExclusion;
+            set
+            {
+                if (!SetProperty(ref useModeHopExclusion, value)) return;
+                AuxiliaryQuality.InvalidateDiagnosis(); SweepPreparation.InvalidateActive();
+                Status = "제거 설정을 변경했습니다. 설정 적용 또는 스윕 검토 후 Ref/Signal을 다시 진단·확정하세요. 기존 확정 입력은 유지됩니다.";
+            }
+        }
         public string ExclusionTailText { get => exclusionTailText; set { if (SetProperty(ref exclusionTailText, value)) { AuxiliaryQuality.InvalidateDiagnosis(); SweepPreparation.InvalidateActive(); } } }
         public string ExclusionLeadText { get => exclusionLeadText; set { if (SetProperty(ref exclusionLeadText, value)) { AuxiliaryQuality.InvalidateDiagnosis(); SweepPreparation.InvalidateActive(); } } }
         public string SweepText { get => sweepText; set => SetProperty(ref sweepText, value); }
@@ -209,7 +220,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
         private ModeHopSettings ReadSettings()
         {
-            var settings = new ModeHopSettings { ThresholdVoltage = Parse(ThresholdText), ExclusionLeadSeconds = Parse(ExclusionLeadText) / 1000, ExclusionTailSeconds = Parse(ExclusionTailText) / 1000, SweepDurationSeconds = string.IsNullOrWhiteSpace(SweepText) ? (double?)null : Parse(SweepText) / 1000, SweepOriginSeconds = Parse(OriginText) / 1000, MaximumPreviewPoints = maximumPreviewPoints };
+            var settings = new ModeHopSettings { ModeHopExclusionBypassed = !UseModeHopExclusion, ThresholdVoltage = Parse(ThresholdText), ExclusionLeadSeconds = Parse(ExclusionLeadText) / 1000, ExclusionTailSeconds = Parse(ExclusionTailText) / 1000, SweepDurationSeconds = string.IsNullOrWhiteSpace(SweepText) ? (double?)null : Parse(SweepText) / 1000, SweepOriginSeconds = Parse(OriginText) / 1000, MaximumPreviewPoints = maximumPreviewPoints };
             settings.Validate(); return settings;
         }
 
@@ -247,6 +258,7 @@ namespace OFDR_Signal_Generator.ViewModels
         {
             var settings = JsonContractSerializer.Read<ModeHopSettings>(path); settings.Validate();
             maximumPreviewPoints = settings.MaximumPreviewPoints;
+            UseModeHopExclusion = !settings.ModeHopExclusionBypassed;
             ThresholdText = settings.ThresholdVoltage.ToString("G17", CultureInfo.InvariantCulture);
             ExclusionTailText = (settings.ExclusionTailSeconds * 1000).ToString("G12", CultureInfo.InvariantCulture);
             ExclusionLeadText = (settings.ExclusionLeadSeconds * 1000).ToString("G12", CultureInfo.InvariantCulture);
@@ -258,6 +270,11 @@ namespace OFDR_Signal_Generator.ViewModels
         private void RefreshSummary()
         {
             OnPropertyChanged(nameof(Ranges));
+            if (appliedSettings.ModeHopExclusionBypassed)
+            {
+                Summary = string.Format(CultureInfo.InvariantCulture, "모드홉 제거 OFF · CH2 High와 앞뒤 추가 제외를 적용하지 않습니다. 전 채널 inf 제외 {0:N0} samples · 실제 제외 {1:N0} samples", analysis.IgnoredSamples, analysis.ExcludedSamples);
+                return;
+            }
             Summary = string.Format(CultureInfo.InvariantCulture, "제외 예정: {0:N0}개 구간 · {1:N0} samples · {2:F7} s · {3:F5}%  |  CH2 > {4:G9} V · 시작 전 추가 제외 {7:G9} ms · 종단 추가 제외 {5:G9} ms · 전 채널 inf 무시 {6:N0} samples (High와 겹침 포함)", analysis.Ranges.Count, analysis.ExcludedSamples, analysis.ExcludedSeconds, analysis.ExcludedPercent, appliedSettings.ThresholdVoltage, appliedSettings.ExclusionTailSeconds * 1000, analysis.IgnoredSamples, appliedSettings.ExclusionLeadSeconds * 1000);
         }
 

@@ -86,6 +86,8 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Infrastructure\ObservableObject.cs" />
+    <Compile Include="ViewModels\StageOptionsViewModel.cs" />
+    <Compile Include="Validation\LegacyModeHopComparisonSmoke.cs" />
     <Compile Include="Controls\ModeHopOverlayPlot.cs" />
     <Compile Include="Controls\AuxiliaryDiagnosticPlot.cs" />
     <Compile Include="Controls\StrainComparisonPlot.cs" />

@@ -21,6 +21,15 @@ namespace OFDR_Signal_Core.Models
         [DataMember] public double? EndSeconds { get; set; }
         [DataMember] public double MaximumNonmonotonicRatio { get; set; } = 1e-5;
         [DataMember] public int MaximumPreviewPoints { get; set; } = 10000;
+        public static int SampleIndexAtOrAfter(double seconds, double intervalSeconds)
+        {
+            if (!ModeHopSettings.IsFinite(seconds) || seconds < 0 || !ModeHopSettings.IsFinite(intervalSeconds) || intervalSeconds <= 0)
+                throw new ArgumentException("샘플 시간과 간격을 확인하세요.");
+            var samples = seconds / intervalSeconds;
+            // Scale floating-point tolerance with the index; 1e-9 alone is smaller than one ULP above 2^24.
+            var tolerance = Math.Max(1e-9, 8 * 2.2204460492503131e-16 * Math.Abs(samples));
+            return checked((int)Math.Ceiling(samples - tolerance));
+        }
         public void Validate()
         {
             if (!ModeHopSettings.IsFinite(StartSeconds) || StartSeconds < 0 || (EndSeconds.HasValue && (!ModeHopSettings.IsFinite(EndSeconds.Value) || EndSeconds.Value <= StartSeconds))) throw new ArgumentException("접합 신호의 시작·끝 시간을 확인하세요.");

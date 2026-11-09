@@ -27,6 +27,7 @@ namespace OFDR_Signal_Core.Models
         [DataMember] public double SourceStartSeconds { get; set; }
         [DataMember] public double SampleIntervalSeconds { get; set; }
         [DataMember] public double ThresholdVoltage { get; set; }
+        [DataMember] public bool ModeHopExclusionBypassed { get; set; }
         [DataMember] public double ExclusionTailSeconds { get; set; }
         [DataMember] public double ExclusionLeadSeconds { get; set; }
         [DataMember] public List<ModeHopRange> IgnoredMeasurementRanges { get; set; }

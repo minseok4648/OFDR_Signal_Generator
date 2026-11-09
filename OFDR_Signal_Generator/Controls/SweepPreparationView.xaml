@@ -31,9 +31,23 @@
     <Button Content="3. 진단 구간을 현재 역할로 확정" Command="{Binding ConfirmCommand}" AutomationProperties.AutomationId="SweepConfirm"/>
    </WrapPanel>
    <WrapPanel>
-    <CheckBox Content="CH2 모드홉 제외 적용" IsChecked="{Binding UseModeHopExclusion}" Margin="0,0,12,8" AutomationProperties.AutomationId="SweepUseModeHopExclusion"/>
+    <CheckBox Content="모드홉 구간 제거 (해제하면 유지)" IsChecked="{Binding UseModeHopExclusion}" Margin="0,0,12,8" AutomationProperties.AutomationId="SweepUseModeHopExclusion" ToolTip="원본/트리거와 같은 설정입니다. 기존/노트북 알고리즘 모두 적용됩니다. 변경 후 Ref/Signal을 다시 검토·진단·확정하세요. 전 채널 inf 제외는 유지합니다."/>
     <Button Content="261106 crop (CH1&gt;3 +15k / 17M)" Command="{Binding SetNotebookCropCommand}" AutomationProperties.AutomationId="SweepNotebookCrop"/>
    </WrapPanel>
+   <Border Background="#F0FDFA" Padding="8" Margin="0,0,0,8" BorderBrush="#99F6E4" BorderThickness="1">
+    <StackPanel>
+     <TextBlock Text="직접 시간 범위 지정 · 원본 취득 시간 기준" FontWeight="SemiBold"/>
+     <TextBlock Text="{Binding CropSourceDescription}" Margin="0,4,0,6" TextWrapping="Wrap" AutomationProperties.AutomationId="SweepCropSource"/>
+     <WrapPanel>
+      <TextBlock Text="시작 offset (ms)" VerticalAlignment="Center" Margin="0,0,8,8"/>
+      <TextBox Width="110" Text="{Binding CropOffsetText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="SweepCropOffset"/>
+      <TextBlock Text="사용할 구간 길이 (ms)" VerticalAlignment="Center" Margin="8,0,8,8"/>
+      <TextBox Width="110" Text="{Binding CropLengthText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="SweepCropLength" ToolTip="비우면 선택 스윕 끝까지 사용합니다. 파일 헤더의 샘플 간격으로 가장 가까운 샘플 수에 맞춥니다."/>
+      <Button Content="시간 범위 적용" Command="{Binding SetTimeCropCommand}" AutomationProperties.AutomationId="SweepTimeCrop"/>
+     </WrapPanel>
+     <TextBlock Text="선택 스윕 시작부터 offset만큼 이동합니다. 모드홉 제외 후 남은 CH3·CH4에 동일 범위를 적용하며, 아래 접합 시간 표시는 제외된 만큼 짧아집니다." TextWrapping="Wrap" Foreground="#475569"/>
+    </StackPanel>
+   </Border>
    <WrapPanel>
     <Button Content="QC 통과 입력을 OFDR 분석에 적용" Command="{Binding ApplyCommand}" AutomationProperties.AutomationId="SweepApply" ToolTip="{Binding AnalysisReadiness}" ToolTipService.ShowOnDisabled="True"/>
     <Button Content="Ref CSV 저장..." Command="{Binding SaveRefCommand}"/><Button Content="Signal CSV 저장..." Command="{Binding SaveSignalCommand}"/>

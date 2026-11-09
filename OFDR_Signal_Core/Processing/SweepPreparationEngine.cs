@@ -99,6 +99,7 @@ namespace OFDR_Signal_Core.Processing
                 SourceStartSeconds = source.SourceStartSeconds, SampleIntervalSeconds = source.SampleIntervalSeconds, ModeHopThresholdVoltage = threshold, Sweep = sweep,
                 ModeHopExclusionTailSeconds = excluded.ExclusionTailSeconds,
                 ModeHopExclusionLeadSeconds = excluded.ExclusionLeadSeconds,
+                ModeHopExclusionBypassed = excluded.ModeHopExclusionBypassed,
                 IgnoredSampleRanges = excluded.IgnoredSampleRanges?.Select(r => new ModeHopRange { Number = r.Number, StartIndex = sweep.StartIndex + r.StartIndex,
                     EndIndexExclusive = sweep.StartIndex + r.EndIndexExclusive, StartSeconds = sweep.StartSeconds + r.StartSeconds, EndSeconds = sweep.StartSeconds + r.EndSeconds }).ToList(),
                 IgnoredMeasurementRanges = excluded.IgnoredMeasurementRanges?.Select(r => new ModeHopRange { Number = r.Number, StartIndex = sweep.StartIndex + r.StartIndex,

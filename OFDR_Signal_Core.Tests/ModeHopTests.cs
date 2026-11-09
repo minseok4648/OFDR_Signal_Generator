@@ -53,6 +53,35 @@ namespace OFDR_Signal_Core.Tests
         }
 
         [TestMethod]
+        public void BypassKeepsHighAndPaddingButStillExcludesNonfiniteSamples()
+        {
+            var data = new TekScopeCsvReader().Read(Csv(new[] { 0.0, 3.4, 3.4, double.PositiveInfinity, 0.0, 0.0 }), CancellationToken.None);
+            var settings = new ModeHopSettings { ModeHopExclusionBypassed = true, ExclusionLeadSeconds = .1, ExclusionTailSeconds = .1 };
+            var result = engine.Detect(data, settings, CancellationToken.None);
+            Assert.IsTrue(result.ModeHopExclusionBypassed);
+            Assert.AreEqual(1L, result.ExcludedSamples);
+            Assert.AreEqual(3, result.Ranges.Single().StartIndex);
+            var stitched = new AuxiliaryQualityEngine().Stitch(data, result, CancellationToken.None);
+            CollectionAssert.AreEqual(new[] { 0, 1, 2, 4, 5 }, stitched.OriginalIndices);
+            Assert.IsTrue(engine.ClipToSamples(result, 1, 5, .001, CancellationToken.None).ModeHopExclusionBypassed);
+            settings.ModeHopExclusionBypassed = false;
+            Assert.AreEqual(6L, engine.Detect(data, settings, CancellationToken.None).ExcludedSamples);
+        }
+
+        [TestMethod]
+        public void BypassSettingsRoundTripAndOldSettingsKeepRemovalEnabled()
+        {
+            var path = Path.Combine(folder, "settings.json");
+            JsonContractSerializer.Write(path, new ModeHopSettings { ModeHopExclusionBypassed = true });
+            Assert.IsTrue(JsonContractSerializer.Read<ModeHopSettings>(path).ModeHopExclusionBypassed);
+            File.WriteAllText(path, "{\"ThresholdVoltage\":1.8,\"MaximumPreviewPoints\":10000}");
+            Assert.IsFalse(JsonContractSerializer.Read<ModeHopSettings>(path).ModeHopExclusionBypassed);
+            var data = new TekScopeCsvReader().Read(Csv(new[] { 3.4, 3.4, 3.4, 3.4 }), CancellationToken.None);
+            Assert.AreEqual(0L, engine.Detect(data, new ModeHopSettings { ModeHopExclusionBypassed = true }, CancellationToken.None).ExcludedSamples);
+            Assert.ThrowsExactly<OperationCanceledException>(() => engine.Detect(data, new ModeHopSettings { ModeHopExclusionBypassed = true }, new CancellationToken(true)));
+        }
+
+        [TestMethod]
         public void NoHighAndAllHighAreValid()
         {
             var data = new TekScopeCsvReader().Read(Csv(new[] { 3.4, 3.4 }), CancellationToken.None);

@@ -20,6 +20,7 @@
             </DockPanel>
         </StackPanel>
         <WrapPanel Grid.Row="1" VerticalAlignment="Center">
+            <CheckBox Content="모드홉 구간 제거" IsChecked="{Binding UseModeHopExclusion}" IsEnabled="{Binding SweepPreparation.CanEdit}" VerticalAlignment="Center" Margin="0,0,12,0" AutomationProperties.AutomationId="ModeHopUseExclusion" ToolTip="해제: CH2 High와 앞뒤 offset 구간을 유지합니다. 전 채널 inf 제외는 유지합니다. 설정 적용 후 Ref/Signal을 다시 진단·확정하세요. 기존/노트북 알고리즘 선택과 독립입니다."/>
             <StackPanel Width="140" Margin="0,0,12,0"><TextBlock Text="트리거 문턱값 (V)"/><TextBox Text="{Binding ThresholdText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="ModeHopThreshold"/></StackPanel>
             <StackPanel Width="190" Margin="0,0,12,0"><TextBlock Text="모드홉 시작 전 추가 제외 (ms)"/><TextBox Text="{Binding ExclusionLeadText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="ModeHopExclusionLead" ToolTip="0.1 입력 시 각 CH2 High 펄스 시작 전 0.1 ms를 추가로 제외합니다. 입력 후 설정 적용을 누르세요. 기본값 0은 앞단 추가 제외 없음입니다."/></StackPanel>
             <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="모드홉 종단 추가 제외 (ms)"/><TextBox Text="{Binding ExclusionTailText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="ModeHopExclusionTail" ToolTip="0.1 입력 시 각 CH2 High 펄스 종단 뒤 0.1 ms를 추가로 제외합니다. 입력 후 설정 적용을 누르세요."/></StackPanel>

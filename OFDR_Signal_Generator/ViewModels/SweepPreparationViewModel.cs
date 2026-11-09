@@ -28,11 +28,17 @@ namespace OFDR_Signal_Generator.ViewModels
         private ModeHopRecording activeSource;
         private double activeThreshold;
         private PreparedSweepData reference, signal;
-        private bool useModeHopExclusion = true;
+        private string cropOffsetText = "0", cropLengthText = "";
+        public string CropOffsetText { get => cropOffsetText; set => SetProperty(ref cropOffsetText, value); }
+        public string CropLengthText { get => cropLengthText; set => SetProperty(ref cropLengthText, value); }
+        public string CropSourceDescription => activeSource == null || activeSweep == null
+            ? "선택 스윕 접합 / 검토 후 사용 가능합니다."
+            : string.Format(CultureInfo.InvariantCulture, "선택 스윕 시작 = 0 ms · 원본 길이 {0:G10} ms · {1:G8} MS/s · 길이 미입력 시 스윕 끝까지",
+                activeSweep.SampleCount * activeSource.SampleIntervalSeconds * 1000, 1e-6 / activeSource.SampleIntervalSeconds);
         public bool UseModeHopExclusion
         {
-            get => useModeHopExclusion;
-            set { if (SetProperty(ref useModeHopExclusion, value)) InvalidateActive(); }
+            get => parent.UseModeHopExclusion;
+            set => parent.UseModeHopExclusion = value;
         }
         public event Action<PreparedSweepData, PreparedSweepData> ApplyRequested;
         public event Action NotebookPresetRequested;
@@ -44,6 +50,7 @@ namespace OFDR_Signal_Generator.ViewModels
         public SweepPreparationViewModel(ModeHopPreviewViewModel owner)
         {
             parent = owner;
+            parent.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(parent.UseModeHopExclusion)) OnPropertyChanged(nameof(UseModeHopExclusion)); };
             parent.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(parent.ThresholdText)) OnPropertyChanged(nameof(ModeHopThresholdText)); if (e.PropertyName == nameof(parent.ExclusionTailText)) OnPropertyChanged(nameof(ModeHopExclusionTailText)); if (e.PropertyName == nameof(parent.ExclusionLeadText)) OnPropertyChanged(nameof(ModeHopExclusionLeadText)); };
             BrowseRefCommand = new RelayCommand(() => Browse("Ref"), () => Ready);
             BrowseSignalCommand = new RelayCommand(() => Browse("Signal"), () => Ready);
@@ -52,6 +59,7 @@ namespace OFDR_Signal_Generator.ViewModels
             ConfirmCommand = new RelayCommand(() => { _ = ConfirmAsync(); }, () => Ready && activeSource != null && Quality.Quality != null);
             ApplyCommand = new RelayCommand(ApplyConfirmed, () => Ready && WorkspaceIdle() && CanAnalyzeConfirmed);
             SetNotebookCropCommand = new RelayCommand(SetNotebookCrop, () => Ready && activeSource != null && Quality.Stitched != null);
+            SetTimeCropCommand = new RelayCommand(() => { _ = SetTimeCropAsync(); }, () => CanEdit && activeSource != null && Quality.Stitched != null);
             NotebookPresetCommand = new RelayCommand(() => { NotebookPresetRequested?.Invoke(); Status = "261106 원본 비교 조건 적용: 첫 상승 엣지→파일 끝, CH2 제외 안 함, 노트북 진단 처리. 각 역할에서 검토→17M crop→위상 분석→확정을 진행하세요."; }, () => Ready && WorkspaceIdle());
             SaveRefCommand = new RelayCommand(() => Save("Ref"), () => Ready && reference != null);
             SaveSignalCommand = new RelayCommand(() => Save("Signal"), () => Ready && signal != null);
@@ -110,6 +118,7 @@ namespace OFDR_Signal_Generator.ViewModels
         public RelayCommand ConfirmCommand { get; }
         public RelayCommand ApplyCommand { get; }
         public RelayCommand SetNotebookCropCommand { get; }
+        public RelayCommand SetTimeCropCommand { get; }
         public RelayCommand NotebookPresetCommand { get; }
         public RelayCommand SaveRefCommand { get; }
         public RelayCommand SaveSignalCommand { get; }
@@ -151,11 +160,6 @@ namespace OFDR_Signal_Generator.ViewModels
                 var threshold = parent.AppliedThreshold;
                 var part = await Task.Run(() => engine.Slice(source, sweep, token));
                 var exclusion = await Task.Run(() => new ModeHopPreviewEngine().ClipToSamples(parent.AppliedExclusion, sweep.StartIndex, sweep.EndIndexExclusive, source.SampleIntervalSeconds, token));
-                if (!UseModeHopExclusion)
-                {
-                    if (part.InvalidSampleCount > 0) throw new InvalidOperationException("제외 없이 재현하려는 범위에 비유한 채널 값이 있습니다. 구간을 조정하세요.");
-                    exclusion = new ModeHopAnalysis { Ranges = new List<ModeHopRange>(), IgnoredMeasurementRanges = new List<ModeHopRange>(), IgnoredSampleRanges = new List<ModeHopRange>() };
-                }
                 token.ThrowIfCancellationRequested(); activeSource = source; activeSweep = sweep; activeThreshold = threshold;
                 Quality.UpdateSource(part, exclusion, threshold, source);
             });
@@ -172,7 +176,6 @@ namespace OFDR_Signal_Generator.ViewModels
             await RunAsync("sweep_confirm", async token =>
             {
                 var data = await Task.Run(() => engine.Prepare(source, sweep, target, stitched, diagnosis, settings, activeThreshold, token));
-                data.Metadata.ModeHopExclusionBypassed = !UseModeHopExclusion;
                 token.ThrowIfCancellationRequested(); SetPrepared(target, data);
                 var block = PreparedSweepQcPolicy.BlockReason(data.Metadata, target, ProcessingLimit());
                 Status = block == null ? target + " 확정: " + Describe(data) + " · CSV 저장 또는 기존 분석에 적용할 수 있습니다."
@@ -210,7 +213,28 @@ namespace OFDR_Signal_Generator.ViewModels
             Quality.SelectRange(first * activeSource.SampleIntervalSeconds, (first + count) * activeSource.SampleIntervalSeconds);
             Status = string.Format(CultureInfo.InvariantCulture, "261106 crop: 원본 [{0:N0}, {1:N0}) · 17,000,000점. 아래 '선택 구간 위상 분석' 후 현재 역할로 확정하세요.", firstOriginal, firstOriginal + count);
         }
-        private static string Describe(PreparedSweepData data) => data == null ? "미확정" : string.Format(CultureInfo.InvariantCulture, "{0} / S{1}{4} · {2:N0} samples · {3}", Path.GetFileName(data.Metadata.SourcePath), data.Metadata.Sweep.Number, data.SampleCount, data.Metadata.Diagnosis?.Decision ?? "진단 정보 없음", data.Metadata.Sweep.SelectionDescription.Length > 0 ? " (" + data.Metadata.Sweep.SelectionDescription + ")" : "");
+        public async Task SetTimeCropAsync()
+        {
+            if (!SetTimeCropCommand.CanExecute(null)) return;
+            await RunAsync("sweep_time_crop", token =>
+            {
+                double offset, length;
+                if (!double.TryParse(CropOffsetText, NumberStyles.Float, CultureInfo.InvariantCulture, out offset)
+                    || (!string.IsNullOrWhiteSpace(CropLengthText) && !double.TryParse(CropLengthText, NumberStyles.Float, CultureInfo.InvariantCulture, out length)))
+                    throw new ArgumentException("시작 offset과 구간 길이를 ms 단위 숫자로 입력하세요.");
+                var requestedLength = string.IsNullOrWhiteSpace(CropLengthText) ? (double?)null : double.Parse(CropLengthText, CultureInfo.InvariantCulture);
+                var crop = SweepTimeCrop.Create(activeSweep, activeSource.SampleIntervalSeconds, Quality.Stitched.OriginalIndices, offset, requestedLength);
+                token.ThrowIfCancellationRequested();
+                Quality.SelectRange(crop.StitchedStartIndex * activeSource.SampleIntervalSeconds, crop.StitchedEndIndexExclusive * activeSource.SampleIntervalSeconds);
+                Status = string.Format(CultureInfo.InvariantCulture,
+                    "시간 범위 적용: 원본 [{0:N0}, {1:N0}) · 원본 길이 {2:G10} ms → 제외 후 {3:N0}점 ({4:G10} ms). 아래 '선택 구간 위상 분석' 후 현재 역할로 확정하세요.",
+                    crop.SourceStartIndex, crop.SourceEndIndexExclusive, (crop.SourceEndIndexExclusive - crop.SourceStartIndex) * activeSource.SampleIntervalSeconds * 1000,
+                    crop.RetainedCount, crop.RetainedCount * activeSource.SampleIntervalSeconds * 1000);
+                return Task.CompletedTask;
+            }, new Dictionary<string, string> { ["crop_origin"] = "selected_sweep_start_original_acquisition_time", ["crop_offset_ms"] = CropOffsetText,
+                ["crop_length_ms"] = CropLengthText, ["rounding"] = "nearest_sample_half_up", ["blank_length"] = "to_selected_sweep_end" });
+        }
+        private static string Describe(PreparedSweepData data) => data == null ? "미확정" : string.Format(CultureInfo.InvariantCulture, "{0} / S{1}{4} · {2:N0} samples · {3} · 모드홉 제거 {5}", Path.GetFileName(data.Metadata.SourcePath), data.Metadata.Sweep.Number, data.SampleCount, data.Metadata.Diagnosis?.Decision ?? "진단 정보 없음", data.Metadata.Sweep.SelectionDescription.Length > 0 ? " (" + data.Metadata.Sweep.SelectionDescription + ")" : "", data.Metadata.ModeHopExclusionBypassed ? "OFF" : "ON");
         private async void Save(string target)
         {
             var data = target == "Ref" ? reference : signal;
@@ -272,9 +296,10 @@ namespace OFDR_Signal_Generator.ViewModels
         public void RefreshCommands()
         {
             OnPropertyChanged(nameof(CanEdit));
+            OnPropertyChanged(nameof(CropSourceDescription));
             OnPropertyChanged(nameof(AnalysisBlockReason)); OnPropertyChanged(nameof(CanAnalyzeConfirmed)); OnPropertyChanged(nameof(AnalysisReadiness));
             OnPropertyChanged(nameof(DiagnosticMode));
-            foreach (var command in new[] { BrowseRefCommand, BrowseSignalCommand, LoadCommand, ReviewCommand, ConfirmCommand, ApplyCommand, SetNotebookCropCommand, NotebookPresetCommand, SaveRefCommand, SaveSignalCommand, ImportRefCommand, ImportSignalCommand }) command?.RaiseCanExecuteChanged();
+            foreach (var command in new[] { BrowseRefCommand, BrowseSignalCommand, LoadCommand, ReviewCommand, ConfirmCommand, ApplyCommand, SetNotebookCropCommand, SetTimeCropCommand, NotebookPresetCommand, SaveRefCommand, SaveSignalCommand, ImportRefCommand, ImportSignalCommand }) command?.RaiseCanExecuteChanged();
         }
         public void Cancel() { cancellation?.Cancel(); }
         public Task CancelAndWaitAsync() { Cancel(); return idle?.Task ?? Task.CompletedTask; }

@@ -11,7 +11,8 @@ namespace OFDR_Signal_Generator
             var fourChannelSmoke = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "--four-channel-smoke") >= 0;
             var temperatureSmoke = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "--notebook-temperature-smoke") >= 0;
             var rawWorkflowSmoke = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "--notebook-raw-workflow-smoke") >= 0;
-            if (smoke || fourChannelSmoke || temperatureSmoke || rawWorkflowSmoke)
+            var legacyComparisonSmoke = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "--legacy-no-mode-hop-smoke") >= 0;
+            if (smoke || fourChannelSmoke || temperatureSmoke || rawWorkflowSmoke || legacyComparisonSmoke)
             {
                 Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 Validation.ModeHopGuiSmoke.AttachBindingTrace();
@@ -36,6 +37,7 @@ namespace OFDR_Signal_Generator
             if (fourChannelSmoke) Loaded += async delegate { await Validation.FourChannelGuiSmoke.RunAsync(this, viewModel); };
             if (temperatureSmoke) Loaded += async delegate { await Validation.NotebookTemperatureGuiSmoke.RunAsync(this, viewModel); };
             if (rawWorkflowSmoke) Loaded += async delegate { await Validation.NotebookRawWorkflowGuiSmoke.RunAsync(this, viewModel); };
+            if (legacyComparisonSmoke) Loaded += async delegate { await Validation.LegacyModeHopComparisonSmoke.RunAsync(this, viewModel); };
         }
     }
 }

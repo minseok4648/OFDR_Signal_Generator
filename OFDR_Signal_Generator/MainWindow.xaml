@@ -70,7 +70,7 @@
                            Text="Ref와 Sig가 동시 취득한 각 보조간섭계로 독립 K-linearization한 뒤 Rayleigh spectral shift를 계산합니다." />
             </StackPanel>
 
-            <TabControl Grid.Row="1" Margin="0,0,0,8">
+            <TabControl Grid.Row="1" Margin="0,0,0,8" AutomationProperties.AutomationId="AlgorithmInputTabs">
                 <TabItem Header="데이터 불러오기">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="8">
@@ -137,6 +137,25 @@
                 <TabItem Header="알고리즘 설정">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10">
+                            <GroupBox Header="단계별 처리 비교 · 진단용" Margin="0,0,0,10" AutomationProperties.AutomationId="StageSelectionPanel">
+                                <StackPanel Margin="6">
+                                    <CheckBox Content="단계별 선택 사용 (물리축 OFF / QC 유지)" IsChecked="{Binding StageComparisonEnabled}" AutomationProperties.AutomationId="StageComparisonEnabled"/>
+                                    <WrapPanel><Button Content="기존 단계 시작값" Command="{Binding StageLegacyPresetCommand}"/><Button Content="노트북 단계 시작값" Command="{Binding StageNotebookPresetCommand}" AutomationProperties.AutomationId="StageNotebookPreset"/></WrapPanel>
+                                    <StackPanel IsEnabled="{Binding DataContext.StageComparisonEnabled, RelativeSource={RelativeSource AncestorType=GroupBox}}" DataContext="{Binding Stages}">
+                                        <CheckBox Content="1. AUX 평균(DC) 제거" IsChecked="{Binding RemoveAuxiliaryMean}" AutomationProperties.AutomationId="StageRemoveAuxMean"/>
+                                        <TextBlock Text="역행 위상 처리"/><ComboBox ItemsSource="{Binding PhaseOrders}" SelectedIndex="{Binding PhaseOrderIndex}" AutomationProperties.AutomationId="StagePhaseOrder"/>
+                                        <TextBlock Text="2. Ref / Signal 위상 Grid"/><ComboBox ItemsSource="{Binding Grids}" SelectedIndex="{Binding GridIndex}" AutomationProperties.AutomationId="StageGrid"/>
+                                        <TextBlock Text="3. Window 적용 위치"/><ComboBox ItemsSource="{Binding Windows}" SelectedIndex="{Binding WindowIndex}" AutomationProperties.AutomationId="StageWindow"/>
+                                        <CheckBox Content="측정 신호 평균 제거 (전체 FFT 전)" IsChecked="{Binding RemoveMeasurementMean}"/>
+                                        <CheckBox Content="국부 magnitude 평균 제거 (상관 전)" IsChecked="{Binding CenterLocalMagnitudes}"/>
+                                        <TextBlock Text="출력 점수 / AUX offset / 측정 offset (sample)" TextWrapping="Wrap"/>
+                                        <UniformGrid Columns="3"><TextBox Text="{Binding OutputSamples, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding AuxiliaryOffset, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding MeasurementOffset, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
+                                        <TextBlock Text="최대 |lag| sample / 종료 FFT bin (0: 전체)" TextWrapping="Wrap"/>
+                                        <UniformGrid Columns="2"><TextBox Text="{Binding MaximumLagSamples, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding StopFftBin, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
+                                    </StackPanel>
+                                    <TextBlock Text="아래 Window 종류·Segment·이동 간격·IFFT padding·상관 정규화도 적용됩니다. 시작값은 출력 524288점입니다. 동일 입력에서 한 항목씩 변경하고 전체 처리 후 현재 값을 기록하세요. 순번 2500~3000은 hop 50에서 FFT bin 125000~150000이며 거리값이 아닙니다." TextWrapping="Wrap" Foreground="#475569" FontSize="11"/>
+                                </StackPanel>
+                            </GroupBox>
                             <CheckBox Content="261106 노트북 비교 조건 (확정 Raw 직접 처리)" IsChecked="{Binding NotebookReproduction}" AutomationProperties.AutomationId="NotebookRawProcessingMode" Margin="0,0,0,8"/>
                             <TextBlock Text="{Binding NotebookModeDescription}" TextWrapping="Wrap" Foreground="#475569" Margin="0,0,0,8"/>
                             <TextBlock Text="노트북: k 보간 점수 / AUX 시작 offset / 측정 시작 offset" TextWrapping="Wrap"/>
@@ -381,11 +400,11 @@
                                     <TextBlock Text="{Binding ProcessingResult.ReferenceId, StringFormat=Ref: {0}}" />
                                     <TextBlock Text="{Binding ProcessingResult.SignalId, StringFormat=Sig: {0}}" />
                                     <TextBlock Margin="0,12,0,0" Text="{Binding ProcessingResult.KLinearization.PhaseSpanRadians, StringFormat=기준 위상 범위: {0:G9} rad}" />
-                                    <TextBlock Text="{Binding ProcessingResult.KLinearization.MedianPhaseIncrementRadians, StringFormat=기준 위상 증가량 중앙값: {0:G9} rad}" />
+                                    <TextBlock Text="{Binding ReferencePhaseIncrementSummary}" />
                                     <TextBlock Text="{Binding ProcessingResult.KLinearization.NonmonotonicRatio, StringFormat=기준 비단조 비율: {0:G9}}" />
                                     <TextBlock Text="{Binding ProcessingResult.KLinearization.AcceptedAnchorCount, StringFormat=기준 사용 앵커 수: {0:N0}}" />
                                     <TextBlock Margin="0,12,0,0" Text="{Binding ProcessingResult.SignalKLinearization.PhaseSpanRadians, StringFormat=측정 위상 범위: {0:G9} rad}" />
-                                    <TextBlock Text="{Binding ProcessingResult.SignalKLinearization.MedianPhaseIncrementRadians, StringFormat=측정 위상 증가량 중앙값: {0:G9} rad}" />
+                                    <TextBlock Text="{Binding SignalPhaseIncrementSummary}" />
                                     <TextBlock Text="{Binding ProcessingResult.SignalKLinearization.NonmonotonicRatio, StringFormat=측정 비단조 비율: {0:G9}}" />
                                     <TextBlock Text="{Binding ProcessingResult.SignalKLinearization.AcceptedAnchorCount, StringFormat=측정 사용 앵커 수: {0:N0}}" />
                                 </StackPanel>
@@ -498,6 +517,13 @@
                     <controls:StrainComparisonPlot Grid.Row="3" Entries="{Binding Entries}" Title="{Binding PlotTitle}" XAxisTitle="{Binding XAxisTitle}" YAxisTitle="{Binding YAxisTitle}" Margin="0,0,0,8" AutomationProperties.AutomationId="FinalComparisonPlot"/>
                     <DataGrid Grid.Row="4" ItemsSource="{Binding Entries}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" EnableRowVirtualization="True" AutomationProperties.AutomationId="ComparisonLegend">
                         <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="삭제" Width="65">
+                                <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                    <Button Content="삭제" Command="{Binding DeleteCommand}" Padding="6,2" Margin="2"
+                                            ToolTip="이 기록만 비교 목록과 그래프에서 삭제합니다."
+                                            AutomationProperties.AutomationId="{Binding Number, StringFormat=ComparisonDelete_{0}}"/>
+                                </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Display Enable" Width="120">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
@@ -516,6 +542,9 @@
                             <DataGridTextColumn Header="Ref" Binding="{Binding Reference}" Width="*"/>
                             <DataGridTextColumn Header="Signal" Binding="{Binding Signal}" Width="*"/>
                             <DataGridTextColumn Header="품질 / 재현 조건" Binding="{Binding Quality}" Width="145"/>
+                            <DataGridTextColumn Header="단계별 처리 조건" Binding="{Binding ProcessingConditions}" Width="260">
+                                <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="ToolTip" Value="{Binding ProcessingConditions}"/></Style></DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
                             <DataGridTextColumn Header="표시 범위" Binding="{Binding Range}" Width="135"/>
                         </DataGrid.Columns>
                     </DataGrid>

@@ -52,8 +52,8 @@ namespace OFDR_Signal_Core.Processing
             if (endSeconds > signal.DurationSeconds + endTolerance || settings.StartSeconds >= signal.DurationSeconds) throw new ArgumentException("분석 범위가 접합 신호를 벗어났습니다.");
             endSeconds = Math.Min(endSeconds, signal.DurationSeconds);
             // Half-open sample selection by sample times, with roundoff tolerance at exact boundaries.
-            var first = (int)Math.Ceiling(settings.StartSeconds / signal.SampleIntervalSeconds - 1e-9);
-            var end = Math.Min(signal.Values.Length, (int)Math.Ceiling(endSeconds / signal.SampleIntervalSeconds - 1e-9));
+            var first = AuxiliaryInspectionSettings.SampleIndexAtOrAfter(settings.StartSeconds, signal.SampleIntervalSeconds);
+            var end = Math.Min(signal.Values.Length, AuxiliaryInspectionSettings.SampleIndexAtOrAfter(endSeconds, signal.SampleIntervalSeconds));
             var n = end - first;
             if (n < 4) throw new ArgumentException("분석 구간에는 최소 4개 샘플이 필요합니다.");
             var selected = new double[n]; Array.Copy(signal.Values, first, selected, 0, n);

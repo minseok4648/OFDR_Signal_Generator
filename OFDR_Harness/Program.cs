@@ -32,6 +32,7 @@ namespace OFDR_Harness
                     case "run-csv": return RunCsv(options);
                     case "run-pair": return RunPair(options);
                     case "reproduce-notebook-temperature": return NotebookTemperatureCommand.Run(options);
+                    case "compare-processing-stages": return StageComparisonCommand.Run(options);
                     case "preview-mode-hop": return ModeHopPreviewCommand.Run(options);
                     case "inspect-mode-hop": options["inspect"] = "true"; return ModeHopPreviewCommand.Run(options);
                     case "validate-four-channel-samples": return FourChannelSampleValidation.Run(options);

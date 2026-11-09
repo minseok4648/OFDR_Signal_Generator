@@ -26,7 +26,9 @@ namespace OFDR_Signal_Generator.Validation
             Directory.CreateDirectory(Path.Combine(directory, "artifacts"));
             var metrics = new Smoke.SmokeMetrics { Status = "FAILED", Checks = new Dictionary<string, bool>(), BindingErrors = Smoke.BindingErrors };
             var watch = Stopwatch.StartNew();
-            JsonContractSerializer.Write(Path.Combine(directory, "config.json"), new Dictionary<string, string> { ["fixture"] = "CH1/2/3/4 synthetic, Ref 4096 / Signal 3072 samples per sweep", ["full_data_validation"] = "false", ["process"] = Environment.Is64BitProcess ? "x64" : "x86" });
+            var timeCropSourceFlag = Array.IndexOf(args, "--time-crop-source");
+            JsonContractSerializer.Write(Path.Combine(directory, "config.json"), new Dictionary<string, string> { ["fixture"] = "CH1/2/3/4 synthetic, Ref 4096 / Signal 3072; crop 65536 per sweep at 25/50/100/500 MS/s", ["full_data_validation"] = "false", ["process"] = Environment.Is64BitProcess ? "x64" : "x86",
+                ["optional_real_crop_source"] = timeCropSourceFlag >= 0 && timeCropSourceFlag + 1 < args.Length ? args[timeCropSourceFlag + 1] : "none", ["real_phase_diagnosis_sample_limit"] = "100000" });
             var parent = workspace.ModeHopPreview; var vm = parent.SweepPreparation;
             try
             {
@@ -106,6 +108,16 @@ namespace OFDR_Signal_Generator.Validation
                 var allInfCsv = Path.Combine(directory, "all_channel_infinity_prepared.csv"); await vm.ExportAsync("Ref", allInfCsv); await vm.ImportAsync("Ref", allInfCsv);
                 Smoke.Check(metrics, "all_channel_infinity_csv_metadata", vm.PreparedReference.Metadata.IgnoredSampleRanges.Sum(r => r.SampleCount) == 4
                     && vm.PreparedReference.Metadata.IgnoredMeasurementRanges.Sum(r => r.SampleCount) == 2 && vm.PreparedReference.SampleCount == 4087);
+                var removalBox = Smoke.Find<CheckBox>(preparationView, "SweepUseModeHopExclusion");
+                removalBox.IsChecked = false; await Smoke.Settle(window); await parent.ApplyAsync();
+                Smoke.Check(metrics, "removal_off_keeps_inf_mask", !parent.UseModeHopExclusion && parent.AppliedExclusion.ModeHopExclusionBypassed && parent.AppliedExclusion.ExcludedSamples == 4);
+                await vm.ReviewAsync(); await vm.Quality.AnalyzeAsync(); await vm.ConfirmAsync();
+                Smoke.Check(metrics, "removal_off_paired_indices", vm.PreparedReference.SampleCount == 4092 && vm.PreparedReference.Metadata.ModeHopExclusionBypassed
+                    && vm.PreparedReference.OriginalIndices.Contains(101) && !vm.PreparedReference.OriginalIndices.Contains(300));
+                var noHopCsv = Path.Combine(directory, "no_modehop_prepared.csv"); await vm.ExportAsync("Ref", noHopCsv); await vm.ImportAsync("Ref", noHopCsv);
+                Smoke.Check(metrics, "removal_off_csv_metadata", vm.PreparedReference.Metadata.ModeHopExclusionBypassed && vm.PreparedReference.Metadata.IgnoredSampleRanges.Sum(r => r.SampleCount) == 4);
+                removalBox.IsChecked = true; await Smoke.Settle(window); await vm.ReviewAsync(); await vm.Quality.AnalyzeAsync(); await vm.ConfirmAsync();
+                Smoke.Check(metrics, "removal_on_restores_exclusions", vm.PreparedReference.SampleCount == 4087 && !vm.PreparedReference.Metadata.ModeHopExclusionBypassed);
                 var finiteConfirmed = vm.PreparedReference;
                 var emptyAuxFixture = Path.Combine(directory, "entire_ch3_infinity.csv"); var emptyLines = File.ReadAllLines(allInfFixture);
                 var emptyHeader = Array.FindIndex(emptyLines, line => line.StartsWith("TIME,"));
@@ -187,6 +199,8 @@ namespace OFDR_Signal_Generator.Validation
                 Smoke.Snapshot(window, directory, "ref_stitched_pair.png");
                 await vm.Quality.AnalyzeAsync(); await vm.ConfirmAsync();
                 Smoke.Check(metrics, "ref_confirmed", vm.PreparedReference?.SampleCount == 4096 && vm.PreparedReference.Metadata.Diagnosis.Decision == "PASS_PHASE_QC");
+                await CheckTimeCrop(window, preparationView, vm, directory, metrics);
+                await vm.LoadForRoleAsync("Ref", refPath); await vm.ReviewAsync(); await vm.Quality.AnalyzeAsync(); await vm.ConfirmAsync();
                 var refAuxiliaryCsv = Path.Combine(directory, "reference_auxiliary_diagnosed.csv");
                 await vm.Quality.ExportCsvAsync(refAuxiliaryCsv, false);
                 var previousRef = vm.PreparedReference;
@@ -307,11 +321,68 @@ namespace OFDR_Signal_Generator.Validation
                 Smoke.Check(metrics, "comparison_repeated_record_appends", comparison.Entries.Count == 4 && comparisonPlot.RenderedCurveCount == 4);
                 comparison.Entries[0].DisplayEnabled = false; comparison.RecordCommand.Execute(null); await Smoke.Settle(window);
                 Smoke.Check(metrics, "comparison_new_record_does_not_reset_hidden_selection", comparison.Entries.Count == 5 && comparisonPlot.RenderedCurveCount == 4 && !comparison.Entries[0].DisplayEnabled && comparison.Entries[4].DisplayEnabled);
+                var hiddenEntry = comparison.Entries[0]; var preservedColor = comparison.Entries[1].LineBrush;
+                var deleteButton = Smoke.Find<Button>(window, "ComparisonDelete_1");
+                Smoke.Check(metrics, "comparison_delete_button_bound", ReferenceEquals(deleteButton.Command, hiddenEntry.DeleteCommand));
+                deleteButton.Command.Execute(null); await Smoke.Settle(window);
+                Smoke.Check(metrics, "comparison_deletes_hidden_record_only", comparison.Entries.Count == 4 && comparisonPlot.RenderedCurveCount == 4
+                    && comparison.Entries[0].Number == 2 && ReferenceEquals(preservedColor, comparison.Entries[0].LineBrush) && !hiddenEntry.DeleteCommand.CanExecute(null));
+                comparison.Entries[0].DeleteCommand.Execute(null); await Smoke.Settle(window);
+                Smoke.Check(metrics, "comparison_deletes_visible_curve", comparison.Entries.Count == 3 && comparisonPlot.RenderedCurveCount == 3 && ReferenceEquals(currentResult, workspace.ProcessingResult));
+                for (var i = 0; i < 15; i++) comparison.RecordCommand.Execute(null);
+                Smoke.Check(metrics, "strain_colors_unique_beyond_palette", comparison.Entries.Select(e => e.LineBrush.ToString()).Distinct().Count() == comparison.Entries.Count);
                 Smoke.Find<Button>(window, "ComparisonClear").Command.Execute(null); await Smoke.Settle(window);
                 Smoke.Check(metrics, "comparison_clear_only_removes_records", comparison.Entries.Count == 0 && comparisonPlot.RenderedCurveCount == 0 && !comparison.ClearCommand.CanExecute(null) && ReferenceEquals(currentResult, workspace.ProcessingResult) && comparison.RecordCommand.CanExecute(null));
                 comparison.RecordCommand.Execute(null); await Smoke.Settle(window);
                 Smoke.Check(metrics, "comparison_record_after_clear_restarts_number", comparison.Entries.Single().Number == 1 && comparisonPlot.RenderedCurveCount == 1);
                 comparison.ClearCommand.Execute(null);
+                workspace.WorkspaceSelectedTab = 1;
+                Smoke.Find<TabControl>(window, "AlgorithmInputTabs").SelectedIndex = 1; await Smoke.Settle(window);
+                  Smoke.Check(metrics, "stage_options_disabled_when_off", !Smoke.Find<ComboBox>(window, "StageGrid").IsEnabled);
+                Smoke.Find<Button>(window, "StageNotebookPreset").Command.Execute(null); await Smoke.Settle(window);
+                Smoke.Check(metrics, "stage_preset_bindings", workspace.StageComparisonEnabled && !workspace.NotebookReproduction && !workspace.UsePhysicalAxes
+                      && workspace.Stages.GridIndex == 1 && Smoke.Find<CheckBox>(window, "StageComparisonEnabled").IsChecked == true && Smoke.Find<ComboBox>(window, "StageGrid").IsEnabled);
+                workspace.Stages.OutputSamples = 4096; workspace.SegmentSize = 128; workspace.SegmentHop = 32;
+                await workspace.RunProcessingAsync(); await Smoke.Settle(window);
+                  Smoke.Check(metrics, "stage_notebook_combo_processed", workspace.ProcessingResult?.Config.StageComparisonEnabled == true && workspace.ProcessingResult.NotebookProfile != null && workspace.ProcessingResult.StrainProfile == null
+                      && workspace.ReferencePhaseIncrementSummary.Contains("미산출"));
+                comparison.RecordName = "단계: 독립 / 전체 Hann"; comparison.RecordCommand.Execute(null);
+                var phaseBox = Smoke.Find<ComboBox>(window, "StagePhaseOrder"); var gridBox = Smoke.Find<ComboBox>(window, "StageGrid"); var windowBox = Smoke.Find<ComboBox>(window, "StageWindow");
+                Smoke.Find<CheckBox>(window, "StageRemoveAuxMean").IsChecked = true;
+                phaseBox.SelectedIndex = 0; gridBox.SelectedIndex = 2; windowBox.SelectedIndex = 0; await Smoke.Settle(window);
+                Smoke.Check(metrics, "stage_selectors_bound", workspace.Stages.RemoveAuxiliaryMean && workspace.Stages.PhaseOrderIndex == 0 && workspace.Stages.GridIndex == 2 && workspace.Stages.WindowIndex == 0);
+                await workspace.RunProcessingAsync(); await Smoke.Settle(window);
+                Smoke.Check(metrics, "stage_changed_pipeline_processed", workspace.ProcessingResult?.Config.StageComparison.Grid == OFDR_Signal_Core.Models.RelativePhaseGrid.CommonSpanTwoPass
+                    && workspace.ProcessingResult.Config.StageComparison.WindowPlacement == OFDR_Signal_Core.Models.DiagnosticWindowPlacement.DistanceSegment);
+                workspace.SelectedSegmentIndex = 20; workspace.InspectSegmentCommand.Execute(null);
+                Smoke.Check(metrics, "stage_inspector_matches_result", Math.Abs(workspace.SelectedSegment.PeakLagBins - workspace.ProcessingResult.SegmentPeakLags[20]) < 1e-8);
+                comparison.RecordName = "단계: 공통 / 국부 Hann"; comparison.RecordCommand.Execute(null); await Smoke.Settle(window);
+                Smoke.Check(metrics, "stage_record_keeps_conditions", comparison.Entries.Count == 3 && comparison.Entries.Last().ProcessingConditions.Contains("CommonSpanTwoPass")
+                      && comparison.Entries[1].ProcessingConditions.Contains("IndependentEndpoints") && comparison.Entries.Last().ProcessingConditions.Contains("hop=32")
+                      && comparison.Entries.Last().Quality.Contains("QC 불합격") && !comparison.XAxisTitle.Contains("× 50"));
+                Smoke.Snapshot(window, directory, "stage_selectors.png");
+                var baseline = comparison.Entries.First(e => e.IsReference); baseline.DeleteCommand.Execute(null);
+                for (var i = 0; i < 18; i++) comparison.RecordCommand.Execute(null);
+                await Smoke.Settle(window);
+                Smoke.Check(metrics, "notebook_colors_unique_and_deleted_baseline_stays_deleted", comparison.Entries.Count == 20
+                    && comparison.Entries.All(e => !e.IsReference) && comparison.Entries.Select(e => e.LineBrush.ToString()).Distinct().Count() == 20
+                    && comparison.Entries.Select(e => e.Number).Distinct().Count() == 20);
+                Smoke.Snapshot(window, directory, "unique_comparison_colors.png");
+                foreach (var entry in comparison.Entries.ToArray()) entry.DeleteCommand.Execute(null);
+                await Smoke.Settle(window);
+                Smoke.Check(metrics, "delete_all_records_clears_plot", comparison.Entries.Count == 0 && comparisonPlot.RenderedCurveCount == 0 && !comparison.ClearCommand.CanExecute(null));
+                comparison.RecordCommand.Execute(null);
+                Smoke.Check(metrics, "record_after_delete_has_new_number", comparison.Entries.Single().Number == 22);
+                comparison.ClearCommand.Execute(null); comparison.RecordCommand.Execute(null);
+                Smoke.Check(metrics, "clear_resets_reference_baseline", comparison.Entries.Count == 2 && comparison.Entries[0].IsReference && comparison.Entries[0].Number == 1);
+                var priorStage = workspace.ProcessingResult; workspace.Stages.OutputSamples = 524288;
+                var cancellingStage = workspace.RunProcessingAsync(); await workspace.CancelAndWaitAsync(); await cancellingStage;
+                Smoke.Check(metrics, "stage_cancel_keeps_completed_result", !workspace.IsBusy && ReferenceEquals(priorStage, workspace.ProcessingResult));
+                workspace.NotebookReproduction = true;
+                  await Smoke.Settle(window);
+                Smoke.Check(metrics, "stage_and_fixed_notebook_are_exclusive", !workspace.StageComparisonEnabled && workspace.NotebookReproduction);
+                  Smoke.Check(metrics, "stage_options_disabled_after_fixed_preset", !Smoke.Find<ComboBox>(window, "StageGrid").IsEnabled);
+                workspace.NotebookReproduction = false;
                 workspace.WorkspaceSelectedTab = 0; tabs.SelectedIndex = 0; await Smoke.Settle(window);
                 var overlay = Smoke.Descendants(view).OfType<ModeHopOverlayPlot>().Single();
                 var center = Smoke.InArea(overlay.InteractionArea, 0.5, 0.5);
@@ -333,7 +404,7 @@ namespace OFDR_Signal_Generator.Validation
             {
                 await parent.CancelAndWaitAsync(); metrics.ElapsedSeconds = watch.Elapsed.TotalSeconds; metrics.PeakWorkingSetBytes = Process.GetCurrentProcess().PeakWorkingSet64;
                 JsonContractSerializer.Write(Path.Combine(directory, "metrics.json"), metrics);
-                File.WriteAllText(Path.Combine(directory, "summary.md"), "# Four-channel WPF smoke\n\nStatus: " + metrics.Status + "\nChecks: " + metrics.Checks.Count + "\nBinding errors: " + Smoke.BindingErrors.Count + "\nError: " + (metrics.Error ?? "none") + "\n\nSynthetic sample fixtures only. Actual x64 WPF startup, bindings, commands, plots, pairing, save/reload and cancellation exercised. OS file-dialog navigation and full real-data processing were not tested.\n");
+                File.WriteAllText(Path.Combine(directory, "summary.md"), "# Four-channel WPF smoke\n\nStatus: " + metrics.Status + "\nChecks: " + metrics.Checks.Count + "\nBinding errors: " + Smoke.BindingErrors.Count + "\nError: " + (metrics.Error ?? "none") + "\n\nSynthetic fixtures plus optional short real CSV (see config; phase diagnosis limited to 100,000 samples). Actual x64 WPF startup, bindings, commands, plots, pairing, crop, comparison deletion/colors, save/reload and cancellation exercised. OS file-dialog navigation and full real-data processing were not tested.\n");
                 Application.Current.Shutdown(metrics.Status == "COMPLETED" ? 0 : 1);
             }
         }
@@ -348,14 +419,66 @@ namespace OFDR_Signal_Generator.Validation
             metadata.Diagnosis.Decision = "REJECT_PHASE_QC"; metadata.Diagnosis.Phase.NonmonotonicRatio = ratio;
             JsonContractSerializer.Write(Path.ChangeExtension(csv, ".metadata.json"), metadata); return csv;
         }
-        private static string Fixture(string folder, string name, int period, bool nonmonotonic = false, bool recordStart = false, bool modeHopPulse = false, bool broadbandMeasurement = false, bool ch4Infinity = false, bool firstEdgeOnly = false, bool allChannelInfinity = false)
+        private static async Task CheckTimeCrop(MainWindow window, SweepPreparationView view, SweepPreparationViewModel vm, string directory, Smoke.SmokeMetrics metrics)
+        {
+            var offset = Smoke.Find<TextBox>(view, "SweepCropOffset"); var length = Smoke.Find<TextBox>(view, "SweepCropLength");
+            Smoke.Check(metrics, "time_crop_controls_bound_and_old_preset_present", BindingOperations.GetBindingExpression(offset, TextBox.TextProperty)?.Status == BindingStatus.Active
+                && ReferenceEquals(Smoke.Find<Button>(view, "SweepTimeCrop").Command, vm.SetTimeCropCommand)
+                && ReferenceEquals(Smoke.Find<Button>(view, "SweepNotebookCrop").Command, vm.SetNotebookCropCommand));
+            var prior = vm.PreparedReference; var priorDiagnosis = vm.Quality.Quality;
+            offset.SetCurrentValue(TextBox.TextProperty, "0.1"); length.SetCurrentValue(TextBox.TextProperty, "170"); await vm.SetTimeCropAsync();
+            Smoke.Check(metrics, "overrun_crop_preserves_diagnosis_and_confirmed_input", ReferenceEquals(prior, vm.PreparedReference)
+                && ReferenceEquals(priorDiagnosis, vm.Quality.Quality) && vm.Status.Contains("사용 가능 길이"));
+            foreach (var rate in new[] { 25000000, 50000000, 100000000, 500000000 })
+            {
+                var path = Fixture(directory, "crop_" + rate + ".csv", 65536, sampleInterval: 1.0 / rate);
+                await vm.LoadForRoleAsync("Ref", path); await vm.ReviewAsync();
+                offset.SetCurrentValue(TextBox.TextProperty, "0.01"); length.SetCurrentValue(TextBox.TextProperty, "0.04");
+                await vm.SetTimeCropAsync();
+                Smoke.Check(metrics, "time_crop_requires_new_diagnosis_" + rate, vm.Quality.Quality == null && !vm.ConfirmCommand.CanExecute(null));
+                await vm.Quality.AnalyzeAsync(); await vm.ConfirmAsync();
+                var expectedStart = 5 + rate / 100000; var count = rate / 25000;
+                Smoke.Check(metrics, "crop_sampling_rate_and_pairing_" + rate, vm.PreparedReference.SampleCount == count
+                    && vm.PreparedReference.OriginalIndices[0] == expectedStart && vm.PreparedReference.OriginalIndices.Last() == expectedStart + count - 1);
+            }
+            var maskPath = Fixture(directory, "crop_modehop.csv", 4096, modeHopPulse: true);
+            await vm.LoadForRoleAsync("Ref", maskPath); await vm.ReviewAsync();
+            vm.CropOffsetText = "0.09"; vm.CropLengthText = "0.03"; await vm.SetTimeCropAsync();
+            await vm.Quality.AnalyzeAsync(); await vm.ConfirmAsync();
+            Smoke.Check(metrics, "crop_raw_time_with_exclusion_keeps_paired_indices", vm.PreparedReference.SampleCount == 25
+                && vm.PreparedReference.OriginalIndices.SequenceEqual(Enumerable.Range(95, 30).Where(i => i < 100 || i >= 105)));
+            vm.CropOffsetText = "0"; vm.CropLengthText = ""; await vm.SetTimeCropAsync();
+            Smoke.Check(metrics, "blank_crop_length_reaches_end", Math.Abs(double.Parse(vm.Quality.EndText, CultureInfo.InvariantCulture) - 4.091) < 1e-10);
+            var beforePreset = vm.Quality.EndText; vm.SetNotebookCropCommand.Execute(null);
+            Smoke.Check(metrics, "fixed_261106_crop_still_requires_17m", vm.Status.Contains("261106 crop을 만들 수 없습니다") && vm.Quality.EndText == beforePreset);
+            Smoke.Snapshot(window, directory, "time_crop_controls.png");
+            var args = Environment.GetCommandLineArgs(); var realFlag = Array.IndexOf(args, "--time-crop-source");
+            if (realFlag >= 0 && realFlag + 1 < args.Length)
+            {
+                vm.UseFirstRisingEdgeToRecordEnd = true; vm.UseModeHopExclusion = false;
+                await vm.LoadForRoleAsync("Ref", args[realFlag + 1]); await vm.ReviewAsync();
+                vm.CropOffsetText = "0.15"; vm.CropLengthText = "2"; await vm.SetTimeCropAsync();
+                await vm.Quality.AnalyzeAsync(); await vm.ConfirmAsync();
+                var metadata = vm.PreparedReference.Metadata;
+                Smoke.Check(metrics, "real_short_record_50msps_crop_100k", vm.PreparedReference.SampleCount == 100000
+                    && vm.PreparedReference.OriginalIndices[0] == vm.SelectedSweep.StartIndex + 7500
+                    && metadata.SourcePath == args[realFlag + 1]);
+                JsonContractSerializer.Write(Path.Combine(directory, "real_time_crop_preparation.json"), metadata);
+                var realCropCsv = Path.Combine(directory, "real_time_crop.csv"); await vm.ExportAsync("Ref", realCropCsv); await vm.ImportAsync("Ref", realCropCsv);
+                Smoke.Check(metrics, "real_time_crop_csv_roundtrip", vm.PreparedReference.SampleCount == 100000
+                    && vm.PreparedReference.Metadata.SourceSha256 == metadata.SourceSha256 && vm.PreparedReference.OriginalIndices[0] == vm.SelectedSweep.StartIndex + 7500);
+                Smoke.Snapshot(window, directory, "real_short_record_time_crop.png");
+                vm.UseCompleteSweeps = true; vm.UseModeHopExclusion = true;
+            }
+        }
+        private static string Fixture(string folder, string name, int period, bool nonmonotonic = false, bool recordStart = false, bool modeHopPulse = false, bool broadbandMeasurement = false, bool ch4Infinity = false, bool firstEdgeOnly = false, bool allChannelInfinity = false, double sampleInterval = 1e-6)
         {
             var path = Path.Combine(folder, name);
             var count = firstEdgeOnly ? period + 5 : recordStart ? period + 12 : period * 2 + 12;
             using (var writer = new StreamWriter(path))
             {
                 uint randomState = 137;
-                writer.WriteLine("Model,DPO4104B\nSample Interval,1e-6\nRecord Length," + count + "\nVertical Units,V,V,V,V\nHorizontal Units,s\nTIME,CH1,CH2,CH3,CH4");
+                writer.WriteLine("Model,DPO4104B\nSample Interval," + sampleInterval.ToString("G17", CultureInfo.InvariantCulture) + "\nRecord Length," + count + "\nVertical Units,V,V,V,V\nHorizontal Units,s\nTIME,CH1,CH2,CH3,CH4");
                 for (var i = 0; i < count; i++)
                 {
                     var j = ((i - (recordStart ? 0 : 5)) % period + period) % period;
@@ -373,7 +496,7 @@ namespace OFDR_Signal_Generator.Validation
                         if (i == 302) auxiliaryText = "Infinity";
                         if (i == 300 || i == 303) measurementText = "-Infinity";
                     }
-                    writer.WriteLine((-2 + i * 1e-6).ToString("F3", CultureInfo.InvariantCulture) + "," + trigger + "," + modeHop + "," + auxiliaryText + "," + measurementText);
+                    writer.WriteLine((-2 + i * sampleInterval).ToString("F3", CultureInfo.InvariantCulture) + "," + trigger + "," + modeHop + "," + auxiliaryText + "," + measurementText);
                 }
             }
             return path;

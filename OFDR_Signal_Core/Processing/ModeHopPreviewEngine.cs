@@ -20,7 +20,7 @@ namespace OFDR_Signal_Core.Processing
             for (var i = 0; i < recording.SampleCount; i++)
             {
                 if ((i & 0x3fff) == 0) token.ThrowIfCancellationRequested();
-                if (ModeHopSettings.IsFinite(recording.Trigger[i]) && recording.Trigger[i] > settings.ThresholdVoltage) { if (start < 0) start = i; }
+                if (!settings.ModeHopExclusionBypassed && ModeHopSettings.IsFinite(recording.Trigger[i]) && recording.Trigger[i] > settings.ThresholdVoltage) { if (start < 0) start = i; }
                 else if (start >= 0) { excluded += AddRange(ranges, Math.Max(0, start - lead), (int)Math.Min(recording.SampleCount, (long)i + tail), recording.SampleIntervalSeconds); start = -1; }
             }
             if (start >= 0) excluded += AddRange(ranges, Math.Max(0, start - lead), recording.SampleCount, recording.SampleIntervalSeconds);
@@ -45,7 +45,7 @@ namespace OFDR_Signal_Core.Processing
             {
                 token.ThrowIfCancellationRequested(); AddRange(measurementInvalid, index, index + 1, recording.SampleIntervalSeconds);
             }
-            return new ModeHopAnalysis { ExclusionLeadSeconds = settings.ExclusionLeadSeconds, ExclusionTailSeconds = settings.ExclusionTailSeconds, IgnoredSampleRanges = invalid, IgnoredSamples = recording.InvalidSampleCount,
+            return new ModeHopAnalysis { ModeHopExclusionBypassed = settings.ModeHopExclusionBypassed, ExclusionLeadSeconds = settings.ExclusionLeadSeconds, ExclusionTailSeconds = settings.ExclusionTailSeconds, IgnoredSampleRanges = invalid, IgnoredSamples = recording.InvalidSampleCount,
                 IgnoredMeasurementRanges = measurementInvalid, IgnoredMeasurementSamples = recording.InvalidMeasurementCount,
                 Ranges = ranges, ExcludedSamples = excluded, ExcludedSeconds = excluded * recording.SampleIntervalSeconds, ExcludedPercent = 100.0 * excluded / recording.SampleCount };
         }
@@ -73,7 +73,7 @@ namespace OFDR_Signal_Core.Processing
                 token.ThrowIfCancellationRequested(); var left = Math.Max(first, range.StartIndex); var right = Math.Min(end, range.EndIndexExclusive);
                 if (right > left) allIgnored += AddRange(allInvalid, left - first, right - first, dt);
             }
-            return new ModeHopAnalysis { ExclusionLeadSeconds = analysis.ExclusionLeadSeconds, ExclusionTailSeconds = analysis.ExclusionTailSeconds, IgnoredSampleRanges = allInvalid, IgnoredSamples = allIgnored,
+            return new ModeHopAnalysis { ModeHopExclusionBypassed = analysis.ModeHopExclusionBypassed, ExclusionLeadSeconds = analysis.ExclusionLeadSeconds, ExclusionTailSeconds = analysis.ExclusionTailSeconds, IgnoredSampleRanges = allInvalid, IgnoredSamples = allIgnored,
                 IgnoredMeasurementRanges = invalid, IgnoredMeasurementSamples = ignored, Ranges = ranges, ExcludedSamples = excluded,
                 ExcludedSeconds = excluded * dt, ExcludedPercent = 100.0 * excluded / (end - first) };
         }

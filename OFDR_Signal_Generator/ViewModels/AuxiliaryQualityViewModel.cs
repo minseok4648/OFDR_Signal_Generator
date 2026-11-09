@@ -96,8 +96,8 @@ namespace OFDR_Signal_Generator.ViewModels
         public void SelectRange(double firstSeconds, double endSeconds)
         {
             if (IsBusy || stitched == null) return;
-            StartText = (firstSeconds * 1000).ToString("G12", CultureInfo.InvariantCulture);
-            EndText = (endSeconds * 1000).ToString("G12", CultureInfo.InvariantCulture);
+            StartText = (firstSeconds * 1000).ToString("G17", CultureInfo.InvariantCulture);
+            EndText = (endSeconds * 1000).ToString("G17", CultureInfo.InvariantCulture);
             Status = "분석 범위를 지정했습니다. '선택 구간 위상 분석'을 누르세요.";
         }
         public async Task AnalyzeAsync()

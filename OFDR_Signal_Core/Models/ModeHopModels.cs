@@ -34,6 +34,8 @@ namespace OFDR_Signal_Core.Models
     [DataContract]
     public sealed class ModeHopSettings
     {
+        // False preserves historical settings files that do not contain this field.
+        [DataMember] public bool ModeHopExclusionBypassed { get; set; }
         [DataMember] public double ThresholdVoltage { get; set; } = 1.8;
         [DataMember] public double ExclusionTailSeconds { get; set; }
         [DataMember] public double ExclusionLeadSeconds { get; set; }
@@ -74,6 +76,7 @@ namespace OFDR_Signal_Core.Models
     [DataContract]
     public sealed class ModeHopAnalysis
     {
+        [DataMember] public bool ModeHopExclusionBypassed { get; set; }
         [DataMember] public double ExclusionTailSeconds { get; set; }
         [DataMember] public double ExclusionLeadSeconds { get; set; }
         [DataMember] public List<ModeHopRange> IgnoredMeasurementRanges { get; set; }

@@ -63,10 +63,13 @@ namespace OFDR_Signal_Core.Models
         [DataMember(Order = 32)] public int NotebookResampledSamples { get; set; } = 524288;
         [DataMember(Order = 33)] public int NotebookAuxiliarySliceStart { get; set; } = 40;
         [DataMember(Order = 34)] public int NotebookMeasurementSliceStart { get; set; } = 1;
+        [DataMember(Order = 35)] public bool StageComparisonEnabled { get; set; }
+        [DataMember(Order = 36)] public StageComparisonSettings StageComparison { get; set; } = new StageComparisonSettings();
 
         [OnDeserializing]
         private void InitializeDefaults(StreamingContext context)
         {
+            StageComparison = new StageComparisonSettings();
             NotebookResampledSamples = 524288; NotebookAuxiliarySliceStart = 40; NotebookMeasurementSliceStart = 1;
             SchemaVersion = 3;
             MaxAuxNonmonotonicRatio = 1e-5;

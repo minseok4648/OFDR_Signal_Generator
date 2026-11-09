@@ -25,6 +25,7 @@ namespace OFDR_Signal_Core.Services
             var metrics = new AuxiliaryQualityRunMetrics { Status = status, Error = error?.ToString(), RetainedSamples = signal?.Values.Length ?? 0, JoinCount = signal?.JoinIndices.Length ?? 0, CompressedDurationSeconds = signal?.DurationSeconds ?? 0,
                 ElapsedSeconds = watch.Elapsed.TotalSeconds, PeakWorkingSetBytes = Process.GetCurrentProcess().PeakWorkingSet64, Quality = quality?.Metrics };
             JsonContractSerializer.Write(Path.Combine(DirectoryPath, "metrics.json"), metrics);
+            if (signal?.Exclusion != null) JsonContractSerializer.Write(Path.Combine(DirectoryPath, "exclusion.json"), signal.Exclusion);
             if (signal != null) JsonContractSerializer.Write(Path.Combine(DirectoryPath, "artifacts", "join_indices.json"), signal.JoinIndices);
             if (quality != null) JsonContractSerializer.Write(Path.Combine(DirectoryPath, "artifacts", "quality_plots.json"), quality.Plots);
             File.WriteAllText(Path.Combine(DirectoryPath, "summary.md"), "# Auxiliary quality experiment\n\n- Status: " + status + "\n- Retained samples: " + metrics.RetainedSamples + "\n- Joins: " + metrics.JoinCount +

@@ -40,6 +40,7 @@ namespace OFDR_Signal_Core.Services
                     SampleIntervalSeconds = signal.SampleIntervalSeconds, ThresholdVoltage = threshold, EntireStitchedSignal = entireSignal, StartIndex = first, EndIndexExclusive = end,
                     ExclusionTailSeconds = signal.Exclusion?.ExclusionTailSeconds ?? 0,
                     ExclusionLeadSeconds = signal.Exclusion?.ExclusionLeadSeconds ?? 0,
+                    ModeHopExclusionBypassed = signal.Exclusion?.ModeHopExclusionBypassed ?? false,
                     IgnoredSampleRanges = signal.Exclusion?.IgnoredSampleRanges?.Select(r => new ModeHopRange { Number = r.Number,
                         StartIndex = source.FirstSampleIndex + r.StartIndex, EndIndexExclusive = source.FirstSampleIndex + r.EndIndexExclusive,
                         StartSeconds = (source.FirstSampleIndex + r.StartIndex) * source.SampleIntervalSeconds,
