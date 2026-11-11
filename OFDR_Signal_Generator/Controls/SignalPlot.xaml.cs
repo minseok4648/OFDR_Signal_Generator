@@ -7,11 +7,17 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using OFDR_Signal_Core.Processing;
 
 namespace OFDR_Signal_Generator.Controls
 {
     public partial class SignalPlot : UserControl
     {
+        public static readonly DependencyProperty FftSourceProperty = DependencyProperty.Register(nameof(FftSource),
+            typeof(IPlotViewport), typeof(SignalPlot), new PropertyMetadata(null, OnPlotPropertyChanged));
+        public IPlotViewport FftSource { get => (IPlotViewport)GetValue(FftSourceProperty); set => SetValue(FftSourceProperty, value); }
+        private FftViewportSamples viewport;
+        internal FftViewportSamples DisplayedFft => viewport;
         public static readonly DependencyProperty ValuesProperty =
             DependencyProperty.Register(nameof(Values), typeof(IEnumerable<double>), typeof(SignalPlot), new PropertyMetadata(null, OnPlotPropertyChanged));
 
@@ -132,7 +138,7 @@ namespace OFDR_Signal_Generator.Controls
         private static void OnPlotPropertyChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs e)
         {
             var plot = (SignalPlot)dependencyObject;
-            if (e.Property == ValuesProperty || e.Property == SecondaryValuesProperty)
+            if (e.Property == ValuesProperty || e.Property == SecondaryValuesProperty || e.Property == FftSourceProperty)
             {
                 plot.ResetZoomState();
             }
@@ -148,8 +154,10 @@ namespace OFDR_Signal_Generator.Controls
             }
 
             PlotCanvas.Children.Clear();
-            plottedSamples = (Values ?? Enumerable.Empty<double>()).ToArray();
-            secondaryPlottedSamples = (SecondaryValues ?? Enumerable.Empty<double>()).ToArray();
+            viewport = null;
+            plottedSamples = FftSource == null ? (Values ?? Enumerable.Empty<double>()).ToArray() : new double[0];
+            secondaryPlottedSamples = FftSource == null ? (SecondaryValues ?? Enumerable.Empty<double>()).ToArray() : new double[0];
+            FftRangePanel.Visibility = FftSource == null ? Visibility.Collapsed : Visibility.Visible;
             var markers = (MarkerIndices ?? Enumerable.Empty<int>()).ToArray();
             var sampleCount = GetSampleCount();
             EmptyStateText.Visibility = sampleCount > 1 ? Visibility.Collapsed : Visibility.Visible;
@@ -157,8 +165,8 @@ namespace OFDR_Signal_Generator.Controls
             SelectionRectangle.Visibility = Visibility.Collapsed;
             InteractionHintText.Visibility = sampleCount > 1 && ActualWidth >= 600 ? Visibility.Visible : Visibility.Collapsed;
 
-            var width = Math.Max(0.0, ActualWidth - 10.0);
-            var height = Math.Max(0.0, ActualHeight - 10.0);
+            var width = PlotCanvas.ActualWidth;
+            var height = PlotCanvas.ActualHeight;
 
             if (sampleCount <= 1 || width <= 80.0 || height <= 80.0)
             {
@@ -174,16 +182,24 @@ namespace OFDR_Signal_Generator.Controls
             plotWidth = Math.Max(24.0, width - plotLeft - plotRight);
             plotHeight = Math.Max(24.0, height - plotTop - plotBottom);
 
-            var visiblePrimarySamples = GetVisibleSamples(plottedSamples);
-            var visibleSecondarySamples = GetVisibleSamples(secondaryPlottedSamples);
-            var visibleAllSamples = visiblePrimarySamples.Concat(visibleSecondarySamples).ToArray();
-            if (visibleAllSamples.Length <= 1)
+            if (FftSource != null)
             {
-                return;
+                viewport = FftSource.Read(viewStartIndex, viewEndIndex);
+                plottedSamples = viewport.Signal;
+                secondaryPlottedSamples = viewport.Reference;
+                if (!FftRangeStart.IsKeyboardFocusWithin) FftRangeStart.Text = FftSource.XAt(viewStartIndex).ToString("G9", CultureInfo.InvariantCulture);
+                if (!FftRangeEnd.IsKeyboardFocusWithin) FftRangeEnd.Text = FftSource.XAt(viewEndIndex).ToString("G9", CultureInfo.InvariantCulture);
+                FftRangeUnit.Text = FftSource.XAxisTitle;
+                FftResolutionText.Text = string.Format(CultureInfo.InvariantCulture,
+                    "{0} · {1:N0} / {2:N0}점 · {3}",
+                    viewport.IsReduced ? "최소·최대 요약 (확대 시 전체 표시)" : "범위 내 전체 표시",
+                    viewport.Bins.Length, viewport.OriginalBinCount, FftSource.Description);
             }
-
-            var automaticMin = visibleAllSamples.Min();
-            var automaticMax = visibleAllSamples.Max();
+            var visiblePrimarySamples = FftSource == null ? GetVisibleSamples(plottedSamples) : plottedSamples;
+            var visibleSecondarySamples = FftSource == null ? GetVisibleSamples(secondaryPlottedSamples) : secondaryPlottedSamples;
+            var visibleAllSamples = visiblePrimarySamples.Concat(visibleSecondarySamples).Where(v => !double.IsNaN(v) && !double.IsInfinity(v)).ToArray();
+            var automaticMin = visibleAllSamples.DefaultIfEmpty(0).Min();
+            var automaticMax = visibleAllSamples.DefaultIfEmpty(1).Max();
             plotMin = hasManualYRange ? viewMinY : automaticMin;
             plotMax = hasManualYRange ? viewMaxY : automaticMax;
             plotRange = plotMax - plotMin;
@@ -198,6 +214,8 @@ namespace OFDR_Signal_Generator.Controls
             AddGridLines();
             AddAxes();
             AddAxisLabels();
+            if (visibleAllSamples.Length == 0)
+                AddLabel(plotLeft + 12, plotTop + plotHeight / 2, "표시할 유효 값이 없습니다. 품질 판정 표를 확인하세요.", HorizontalAlignment.Left, Brushes.LightGray);
             if (visibleSecondarySamples.Length > 1)
             {
                 AddSignalPolyline(visibleSecondarySamples, SecondaryLineBrush, 1.3, new DoubleCollection { 6.0, 3.0 });
@@ -208,8 +226,10 @@ namespace OFDR_Signal_Generator.Controls
                 AddSignalPolyline(visiblePrimarySamples, LineBrush, 1.6, null);
             }
 
-            AddMarkers(markers);
+            if (FftSource == null) AddMarkers(markers);
         }
+
+        private void PlotCanvas_OnSizeChanged(object sender, SizeChangedEventArgs e) => RenderPlot();
 
         private void ResetZoomState()
         {
@@ -224,6 +244,7 @@ namespace OFDR_Signal_Generator.Controls
 
         private int GetSampleCount()
         {
+            if (FftSource != null) return FftSource.Count;
             return Math.Max(plottedSamples == null ? 0 : plottedSamples.Length, secondaryPlottedSamples == null ? 0 : secondaryPlottedSamples.Length);
         }
 
@@ -332,7 +353,7 @@ namespace OFDR_Signal_Generator.Controls
 
         private void AddSignalPolyline(IReadOnlyList<double> visibleSamples, Brush stroke, double thickness, DoubleCollection dashArray)
         {
-            var polyline = new Polyline
+            Func<Polyline> create = () => new Polyline
             {
                 Clip = new RectangleGeometry(new Rect(plotLeft, plotTop, plotWidth, plotHeight)),
                 Stroke = stroke,
@@ -340,13 +361,22 @@ namespace OFDR_Signal_Generator.Controls
                 SnapsToDevicePixels = true,
                 StrokeDashArray = dashArray
             };
+            var polyline = create();
 
             for (var visibleIndex = 0; visibleIndex < visibleSamples.Count; visibleIndex++)
             {
-                polyline.Points.Add(new Point(GetX(visibleIndex, visibleSamples.Count), GetY(visibleSamples[visibleIndex])));
+                var value = visibleSamples[visibleIndex];
+                if (double.IsNaN(value) || double.IsInfinity(value))
+                {
+                    if (polyline.Points.Count > 0) PlotCanvas.Children.Add(polyline);
+                    polyline = create(); continue;
+                }
+                var x = viewport == null ? GetX(visibleIndex, visibleSamples.Count)
+                    : plotLeft + (viewport.Bins[visibleIndex] - viewStartIndex) / (double)Math.Max(1, viewEndIndex - viewStartIndex) * plotWidth;
+                polyline.Points.Add(new Point(x, GetY(value)));
             }
 
-            PlotCanvas.Children.Add(polyline);
+            if (polyline.Points.Count > 0) PlotCanvas.Children.Add(polyline);
         }
 
         private void AddMarkers(IEnumerable<int> markers)
@@ -422,8 +452,8 @@ namespace OFDR_Signal_Generator.Controls
             var visibleIndex = (int)Math.Round(ratio * Math.Max(0, visibleCount - 1));
             visibleIndex = Math.Max(0, Math.Min(visibleCount - 1, visibleIndex));
             var globalIndex = viewStartIndex + visibleIndex;
-            var primaryValue = TryGetSampleValue(plottedSamples, globalIndex);
-            var secondaryValue = TryGetSampleValue(secondaryPlottedSamples, globalIndex);
+            var primaryValue = FftSource == null ? TryGetSampleValue(plottedSamples, globalIndex) : FftSource.ValueAt(globalIndex);
+            var secondaryValue = FftSource == null ? TryGetSampleValue(secondaryPlottedSamples, globalIndex) : FftSource.ValueAt(globalIndex, true);
             var xValue = GetXAxisValueForGlobalIndex(globalIndex);
 
             HoverText.Text = secondaryValue.HasValue
@@ -438,6 +468,9 @@ namespace OFDR_Signal_Generator.Controls
                     FormatAxisValue(xValue),
                     string.IsNullOrWhiteSpace(YAxisTitle) ? "Y" : YAxisTitle,
                     FormatAxisValue(primaryValue ?? 0.0));
+            if (FftSource != null) HoverText.Text = string.Format(CultureInfo.InvariantCulture, "{0}: {1}\n{2}: {3}\n{4}: {5}",
+                FftSource.XAxisTitle, FormatAxisValue(xValue), FftSource.PrimaryLabel, FormatAxisValue(primaryValue ?? 0),
+                FftSource.SecondaryLabel, FormatAxisValue(secondaryValue ?? 0));
             HoverPopup.Visibility = Visibility.Visible;
 
             var popupX = Math.Min(ActualWidth - 140.0, Math.Max(8.0, point.X + 12.0));
@@ -541,8 +574,8 @@ namespace OFDR_Signal_Generator.Controls
             double left, right, minY, maxY;
             var factor = PlotZoomWindow.WheelFactor(delta);
             PlotZoomWindow.ScaleRange(viewStartIndex, viewEndIndex, 0, count - 1, (point.X - plotLeft) / plotWidth, factor, out left, out right);
-            var all = plottedSamples.Concat(secondaryPlottedSamples).ToArray();
-            var fullMin = all.Min(); var fullMax = all.Max();
+            var all = plottedSamples.Concat(secondaryPlottedSamples).Where(v => !double.IsNaN(v) && !double.IsInfinity(v)).DefaultIfEmpty(0).ToArray();
+            var fullMin = FftSource == null ? all.Min() : FftSource.DbFloor; var fullMax = FftSource == null ? all.Max() : FftSource.DbCeiling;
             if (fullMax - fullMin < 1e-9) fullMax = fullMin + 1;
             PlotZoomWindow.ScaleRange(plotMin, plotMin + plotRange, fullMin, fullMax, (plotTop + plotHeight - point.Y) / plotHeight, factor, out minY, out maxY);
             zoomHistory.Push(new ZoomState { StartIndex = viewStartIndex, EndIndex = viewEndIndex, HasManualYRange = hasManualYRange, MinY = viewMinY, MaxY = viewMaxY });
@@ -554,6 +587,30 @@ namespace OFDR_Signal_Generator.Controls
         }
 
         internal void ResetZoom() { ResetZoomState(); RenderPlot(); }
+        internal bool SetFftRange(double start, double end)
+        {
+            var source = FftSource;
+            if (source == null || source.Count < 2 || double.IsNaN(start) || double.IsNaN(end)
+                || double.IsInfinity(start) || double.IsInfinity(end) || start >= end
+                || end < source.XStart || start > source.XEnd || source.XEnd <= source.XStart) return false;
+            var step = (source.XEnd - source.XStart) / (source.Count - 1);
+            var left = (int)Math.Floor((Math.Max(source.XStart, start) - source.XStart) / step);
+            var right = (int)Math.Ceiling((Math.Min(source.XEnd, end) - source.XStart) / step);
+            left = Math.Max(0, Math.Min(source.Count - 2, left));
+            right = Math.Max(left + 1, Math.Min(source.Count - 1, right));
+            zoomHistory.Push(new ZoomState { StartIndex = viewStartIndex, EndIndex = viewEndIndex,
+                HasManualYRange = hasManualYRange, MinY = viewMinY, MaxY = viewMaxY });
+            viewStartIndex = left; viewEndIndex = right; hasManualYRange = false;
+            RenderPlot(); return true;
+        }
+        private void ApplyFftRange_OnClick(object sender, RoutedEventArgs e)
+        {
+            double start, end;
+            if (!double.TryParse(FftRangeStart.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out start)
+                || !double.TryParse(FftRangeEnd.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out end)
+                || !SetFftRange(start, end)) FftResolutionText.Text = "시작 < 끝인 유효 범위를 입력하세요. 소수점은 '.'입니다.";
+        }
+        private void AutoY_OnClick(object sender, RoutedEventArgs e) { hasManualYRange = false; RenderPlot(); }
         private void PlotCanvas_OnMouseWheel(object sender, MouseWheelEventArgs e)
         {
             if (GetSampleCount() < 2 || !IsInPlotArea(e.GetPosition(PlotCanvas))) return;
@@ -641,6 +698,7 @@ namespace OFDR_Signal_Generator.Controls
 
         private double GetXAxisValueForGlobalIndex(int globalIndex)
         {
+            if (FftSource != null) return FftSource.XAt(globalIndex);
             var sampleCount = GetSampleCount();
             if (sampleCount <= 1)
             {

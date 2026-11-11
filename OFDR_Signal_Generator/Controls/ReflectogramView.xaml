@@ -1,0 +1,60 @@
+<UserControl x:Class="OFDR_Signal_Generator.Controls.ReflectogramView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="clr-namespace:OFDR_Signal_Generator.Controls">
+ <UserControl.Resources><BooleanToVisibilityConverter x:Key="SignalResultVisibility"/></UserControl.Resources>
+ <ScrollViewer VerticalScrollBarVisibility="Auto">
+  <StackPanel Margin="12">
+   <TextBlock Text="Reflectogram · 정상 구간 전력 평균" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,8"/>
+   <TextBlock Text="PDF 5쪽 방식의 B/C 비교 · CH2 > 1.8 V + 100 μs 제외 → 1 ms 이상 연속 구간 → 구간별 전력 평균" TextWrapping="Wrap"/>
+   <TextBlock Text="Tek TIME,CH1..CH4 및 Index,Time_s,CH1_Ref_V,..,CH4_V 통합 CSV 자동 인식 · 채널 역할은 CH1=스윕 / CH2=모드홉 / CH3=AUX / CH4=측정" TextWrapping="Wrap" Foreground="#475569" FontSize="11"/>
+   <Grid Margin="0,10,0,0" IsEnabled="{Binding ControlsEnabled}">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="70"/><ColumnDefinition/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
+    <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+    <TextBlock Text="Ref CSV" VerticalAlignment="Center"/>
+    <TextBox Grid.Column="1" Text="{Binding ReferencePath, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="ReflectogramRefPath"/>
+    <Button Grid.Column="2" Content="Ref 선택" Command="{Binding BrowseReferenceCommand}" Margin="8,0,0,8"/>
+    <TextBlock Grid.Row="1" Text="Signal (선택)" VerticalAlignment="Center" TextWrapping="Wrap"/>
+    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SignalPath, UpdateSourceTrigger=PropertyChanged}"/>
+    <Button Grid.Row="1" Grid.Column="2" Content="Signal 선택" Command="{Binding BrowseSignalCommand}" Margin="8,0,0,8"/>
+   </Grid>
+   <WrapPanel>
+    <TextBlock Text="FFT Window" VerticalAlignment="Center" Margin="0,0,8,8"/>
+    <ComboBox Width="130" ItemsSource="{Binding Windows}" SelectedItem="{Binding Window}" IsEnabled="{Binding ControlsEnabled}" Margin="0,0,12,8"/>
+    <Button Content="B/C 전력 평균 실행" Command="{Binding RunCommand}" AutomationProperties.AutomationId="RunReflectogram"/>
+    <Button Content="취소" Command="{Binding CancelCommand}"/>
+    <Button Content="결과 폴더" Command="{Binding OpenResultsCommand}"/>
+   </WrapPanel>
+   <WrapPanel IsEnabled="{Binding ControlsEnabled}">
+    <TextBlock Text="AUX 필터 (MHz)" VerticalAlignment="Center" Margin="0,0,8,8"/>
+    <TextBox Width="70" Text="{Binding BandpassLowMHz, UpdateSourceTrigger=PropertyChanged}" ToolTip="AUX 필터 하한 MHz" AutomationProperties.AutomationId="ReflectogramLowMHz"/>
+    <TextBlock Text=" ~ " VerticalAlignment="Center" Margin="0,0,0,8"/>
+    <TextBox Width="70" Text="{Binding BandpassHighMHz, UpdateSourceTrigger=PropertyChanged}" ToolTip="요청 AUX 필터 상한 MHz" AutomationProperties.AutomationId="ReflectogramHighMHz"/>
+    <CheckBox Content="샘플률에 맞춰 상한 자동 제한" IsChecked="{Binding AutoLimitBandpass}" VerticalAlignment="Center" Margin="12,0,0,8" AutomationProperties.AutomationId="ReflectogramAutoBandpass"/>
+   </WrapPanel>
+   <TextBlock Text="요청 상한이 Fs/2 이상일 때만 0.45×Fs로 제한합니다 (10MS/s → 4.5MHz). 실제 적용 대역은 결과 요약에 표시됩니다." TextWrapping="Wrap" FontSize="11" Foreground="#475569"/>
+   <TextBlock Text="B: 50 nm/s, 1550 nm  |  C: AUX 필터 위 설정, guard 2 μs, τ=0.979 μs  |  ng=1.4682  |  C 보간 65,536점, FFT padding ×4, 거리 grid 1 mm" TextWrapping="Wrap"/>
+   <TextBlock Text="원문에 없는 Window·필터 차수·평균 가중치는 명시적 가정입니다. 기본 Rectangular / 구간 동일 가중치. 지연 보정은 적용하지 않습니다. 1 mm grid는 실제 공간 분해능을 뜻하지 않습니다." TextWrapping="Wrap" Foreground="#6B4C18" Margin="0,4,0,4"/>
+   <TextBlock Text="{Binding Status}" TextWrapping="Wrap" FontWeight="SemiBold" AutomationProperties.AutomationId="ReflectogramStatus"/>
+   <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,6,0,8"/>
+   <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+    <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+    <GroupBox Header="Ref · 전체 거리">
+     <local:SignalPlot Height="270" FftSource="{Binding ReferencePlot}" XAxisTitle="m" YAxisTitle="전력밀도 (dB re 1 V²/m)" AutomationProperties.AutomationId="ReflectogramRefPlot"/>
+    </GroupBox>
+    <GroupBox Grid.Column="1" Header="Ref · C 주 반사 확대">
+     <local:SignalPlot x:Name="ReferenceDetail" Height="270" FftSource="{Binding ReferencePlot}" XAxisTitle="m" YAxisTitle="전력밀도 (dB re 1 V²/m)" AutomationProperties.AutomationId="ReflectogramRefDetail"/>
+    </GroupBox>
+    <GroupBox Grid.Row="1" Header="Signal · 전체 거리" Visibility="{Binding HasSignalResult, Converter={StaticResource SignalResultVisibility}}">
+     <local:SignalPlot Height="270" FftSource="{Binding SignalPlot}" XAxisTitle="m" YAxisTitle="전력밀도 (dB re 1 V²/m)" AutomationProperties.AutomationId="ReflectogramSignalPlot"/>
+    </GroupBox>
+    <GroupBox Grid.Row="1" Grid.Column="1" Header="Signal · C 주 반사 확대" Visibility="{Binding HasSignalResult, Converter={StaticResource SignalResultVisibility}}">
+     <local:SignalPlot x:Name="SignalDetail" Height="270" FftSource="{Binding SignalPlot}" XAxisTitle="m" YAxisTitle="전력밀도 (dB re 1 V²/m)" AutomationProperties.AutomationId="ReflectogramSignalDetail"/>
+    </GroupBox>
+   </Grid>
+   <TextBlock Text="거리 범위에 17.9~18.4 m를 입력하면 보정 후 피크, 26~36 m를 입력하면 잡음 바닥을 비교할 수 있습니다. 원점은 광경로차 기준이며 케이블 입구로 교정되지 않았습니다." TextWrapping="Wrap" Margin="0,6,0,4"/>
+   <TextBlock Text="{Binding ResultDirectory}" TextWrapping="Wrap"/>
+  </StackPanel>
+ </ScrollViewer>
+</UserControl>

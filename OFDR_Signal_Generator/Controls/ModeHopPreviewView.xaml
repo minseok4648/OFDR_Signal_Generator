@@ -11,6 +11,7 @@
         </Grid.RowDefinitions>
         <StackPanel>
             <TextBlock Text="전체 신호 / Mode hop 검토" FontSize="24" FontWeight="Bold" Foreground="#0F172A"/>
+            <TextBlock Text="Tek TIME,CH1..CH4 / Index,Time_s,CH1_Ref_V,..,CH4_V 자동 인식 · 열 이름의 Ref/Xpol/Ypol 표기와 무관하게 CH1=스윕, CH2=모드홉, CH3=AUX, CH4=측정으로 읽습니다." Foreground="#475569" FontSize="11" TextWrapping="Wrap"/>
             <TextBlock Text="CH2 High·시작 전/종단 추가 제외·전 채널 inf 구간을 붉은 음영으로 표시합니다. 원본 시간축과 샘플 위치는 보존됩니다." Foreground="#475569" Margin="0,4,0,10" TextWrapping="Wrap"/>
             <DockPanel LastChildFill="True">
                 <Button DockPanel.Dock="Left" Content="CSV 선택..." Command="{Binding BrowseCommand}" AutomationProperties.AutomationId="ModeHopBrowse"/>

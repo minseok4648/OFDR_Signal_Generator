@@ -60,6 +60,13 @@ namespace OFDR_Signal_Generator.ViewModels
         public RelayCommand UseLegacyInputsCommand { get; }
         private IndependentOfdrProcessingResult processingResult;
         public FinalStrainComparisonViewModel FinalComparison { get; }
+        public ReflectogramViewModel Reflectogram { get; }
+        public DistributedComparisonViewModel DistributedComparison { get; }
+        public UnifiedAnalysisViewModel Unified { get; }
+        public bool UnifiedManualEnabled => Unified?.IsBusy != true;
+        public bool ReflectogramManualEnabled => UnifiedManualEnabled && DistributedComparison?.IsBusy != true;
+        public bool ZnccManualEnabled => UnifiedManualEnabled && Reflectogram?.IsBusy != true;
+        public bool LegacyControlsEnabled => Reflectogram?.IsBusy != true && DistributedComparison?.IsBusy != true && UnifiedManualEnabled;
         private bool notebookReproduction;
         private bool stageComparisonEnabled;
         public StageOptionsViewModel Stages { get; } = new StageOptionsViewModel();
@@ -69,15 +76,36 @@ namespace OFDR_Signal_Generator.ViewModels
             set
             {
                 if (!SetProperty(ref stageComparisonEnabled, value)) return;
-                if (value) { NotebookReproduction = false; AllowFailedPhaseQcForDiagnostics = true; UsePhysicalAxes = false; }
+                if (value) { NotebookReproduction = false; AllowFailedPhaseQcForDiagnostics = true; }
                 OnPropertyChanged(nameof(NotebookModeDescription));
             }
         }
         public RelayCommand StageLegacyPresetCommand { get; private set; }
         public RelayCommand StageNotebookPresetCommand { get; private set; }
+        public RelayCommand DocumentNominalPresetCommand { get; private set; }
+        public RelayCommand DocumentPhasePresetCommand { get; private set; }
+        public RelayCommand DocumentDelayPresetCommand { get; private set; }
+        public RelayCommand DocumentCableRangeCommand { get; private set; }
+        private StageQualityPoint selectedDocumentPoint;
+        public StageQualityPoint SelectedDocumentPoint
+        {
+            get => selectedDocumentPoint;
+            set
+            {
+                if (!SetProperty(ref selectedDocumentPoint, value) || value == null || IsBusy || ProcessingResult?.DocumentStages == null) return;
+                var index = ProcessingResult.DocumentStages.Points.IndexOf(value);
+                if (index >= 0) { SelectedSegmentIndex = index; InspectSegment(); }
+            }
+        }
+        private void ApplyDocumentPreset(int stage)
+        {
+            StageComparisonEnabled = true; Stages.SetDocumentPreset(stage); SegmentSize = 128; SegmentHop = 32; ZeroPadFactor = 8;
+            SelectedWindowFunction = "Hann"; NormalizeCorrelation = true; CorrelationScale = 1;
+        }
         private void ApplyStagePreset(bool notebook)
         {
             StageComparisonEnabled = true; Stages.SetPreset(notebook); SegmentSize = 4096; SegmentHop = 50; ZeroPadFactor = 8;
+            UsePhysicalAxes = false;
             SelectedWindowFunction = "Hann"; NormalizeCorrelation = !notebook;
         }
         public bool NotebookReproduction
@@ -146,8 +174,19 @@ namespace OFDR_Signal_Generator.ViewModels
         {
             StageLegacyPresetCommand = new RelayCommand(() => ApplyStagePreset(false), () => !IsBusy);
             StageNotebookPresetCommand = new RelayCommand(() => ApplyStagePreset(true), () => !IsBusy);
+            DocumentNominalPresetCommand = new RelayCommand(() => ApplyDocumentPreset(0), () => !IsBusy);
+            DocumentPhasePresetCommand = new RelayCommand(() => ApplyDocumentPreset(1), () => !IsBusy);
+            DocumentCableRangeCommand = new RelayCommand(() => { Stages.SetCableRange(); }, () => !IsBusy);
+            DocumentDelayPresetCommand = new RelayCommand(() => ApplyDocumentPreset(2), () => !IsBusy);
             Stages.PropertyChanged += (s, e) => OnPropertyChanged(nameof(NotebookModeDescription));
-            FinalComparison = new FinalStrainComparisonViewModel(() => ProcessingResult, () => !IsBusy);
+            FinalComparison = new FinalStrainComparisonViewModel(() => ProcessingResult, () => !IsBusy && LegacyControlsEnabled);
+            Reflectogram = new ReflectogramViewModel(() => !IsBusy && !ModeHopPreview.IsBusy && !FinalComparison.IsBusy && DistributedComparison?.IsBusy != true && UnifiedManualEnabled);
+            DistributedComparison = new DistributedComparisonViewModel(() => !IsBusy && !ModeHopPreview.IsBusy && !FinalComparison.IsBusy && !Reflectogram.IsBusy && UnifiedManualEnabled);
+            Unified = new UnifiedAnalysisViewModel(this);
+            Unified.PropertyChanged += (s,e) => { if(e.PropertyName == nameof(Unified.IsBusy)) { OnPropertyChanged(nameof(UnifiedManualEnabled)); OnPropertyChanged(nameof(LegacyControlsEnabled)); RaiseCommandStates(); } };
+            DistributedComparison.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(DistributedComparison.IsBusy)) { OnPropertyChanged(nameof(LegacyControlsEnabled)); RaiseCommandStates(); } };
+            Reflectogram.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(Reflectogram.IsBusy)) { OnPropertyChanged(nameof(LegacyControlsEnabled)); RaiseCommandStates(); } };
+            FinalComparison.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(FinalComparison.IsBusy)) { Reflectogram.Refresh(); DistributedComparison.Refresh(); } };
             AuxiliaryPath = ExistingOrEmpty(Path.Combine(DefaultDataRoot, "0_0mm0000CH1.isf"));
             SignalAuxiliaryPath = ExistingOrEmpty(Path.Combine(DefaultDataRoot, "0_4mm0000CH1.isf"));
             ReferencePath = ExistingOrEmpty(Path.Combine(DefaultDataRoot, "0_0mm0000CH2.isf"));
@@ -162,10 +201,10 @@ namespace OFDR_Signal_Generator.ViewModels
             ConvertSignalAuxiliaryCommand = new RelayCommand(() => ConvertInputAsync(InputRole.SignalAuxiliary), () => CanConvert(SignalAuxiliaryPath));
             ConvertReferenceCommand = new RelayCommand(() => ConvertInputAsync(InputRole.Reference), () => CanConvert(ReferencePath));
             ConvertSignalCommand = new RelayCommand(() => ConvertInputAsync(InputRole.Signal), () => CanConvert(SignalPath));
-            RunProcessingCommand = new RelayCommand(() => { _ = RunProcessingAsync(); }, () => !IsBusy && !ModeHopPreview.IsBusy && InputsSelected() && !IsProcessingQcBlocked);
+            RunProcessingCommand = new RelayCommand(() => { _ = RunProcessingAsync(); }, () => !IsBusy && LegacyControlsEnabled && !ModeHopPreview.IsBusy && InputsSelected() && !IsProcessingQcBlocked);
             UseLegacyInputsCommand = new RelayCommand(() => { UseSavedCsvFileInputs = false; ClearPreparedInput(); }, () => !IsBusy);
             UseSavedCsvFilesCommand = new RelayCommand(ConfigureCurrentDiagnosedCsvFiles, () => !IsBusy && !ModeHopPreview.IsBusy);
-            ModeHopPreview.SweepPreparation.WorkspaceIdle = () => !IsBusy;
+            ModeHopPreview.SweepPreparation.WorkspaceIdle = () => !IsBusy && LegacyControlsEnabled;
             ModeHopPreview.SweepPreparation.ProcessingLimit = () => MaxNonmonotonicRatio;
             ModeHopPreview.SweepPreparation.AllowDiagnostic = () => AllowFailedPhaseQcForDiagnostics;
             ModeHopPreview.SweepPreparation.ApplyRequested += ApplyPreparedSweeps;
@@ -175,7 +214,7 @@ namespace OFDR_Signal_Generator.ViewModels
                 ModeHopPreview.SweepPreparation.UseFirstRisingEdgeToRecordEnd = true;
                 ModeHopPreview.SweepPreparation.UseModeHopExclusion = false;
             };
-            ModeHopPreview.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(ModeHopPreview.IsBusy)) RunProcessingCommand.RaiseCanExecuteChanged(); };
+            ModeHopPreview.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(ModeHopPreview.IsBusy)) { RunProcessingCommand.RaiseCanExecuteChanged(); Reflectogram.Refresh(); DistributedComparison.Refresh(); } };
             CancelCommand = new RelayCommand(Cancel, () => IsBusy);
             InspectSegmentCommand = new RelayCommand(InspectSegment, () => !IsBusy && ProcessingResult != null);
         }
@@ -252,7 +291,22 @@ namespace OFDR_Signal_Generator.ViewModels
         public double ProgressPercent { get { return progressPercent; } private set { SetProperty(ref progressPercent, value); } }
         public string ProgressText { get { return progressText; } private set { SetProperty(ref progressText, value); } }
         public string InputValidationText { get { return inputValidationText; } private set { SetProperty(ref inputValidationText, value); } }
-        public IndependentOfdrProcessingResult ProcessingResult { get { return processingResult; } private set { if (SetProperty(ref processingResult, value)) { OnPropertyChanged(nameof(HasResult)); OnPropertyChanged(nameof(CalibrationSummary)); OnPropertyChanged(nameof(ReferencePhaseIncrementSummary)); OnPropertyChanged(nameof(SignalPhaseIncrementSummary)); RaiseLargeGraphProperties(); RaiseCommandStates(); } } }
+        public FftSpectrumViewport FftPlotSource { get; private set; }
+        public FftSpectrumViewport LargeGraphFftSource => SelectedLargeGraph.StartsWith("3.", StringComparison.Ordinal) ? FftPlotSource : null;
+        public IndependentOfdrProcessingResult ProcessingResult
+        {
+            get => processingResult;
+            private set
+            {
+                if (ReferenceEquals(processingResult, value)) return;
+                FftPlotSource = value == null ? null : new FftSpectrumViewport(value);
+                SetProperty(ref processingResult, value);
+                OnPropertyChanged(nameof(FftPlotSource));
+                OnPropertyChanged(nameof(HasResult)); OnPropertyChanged(nameof(CalibrationSummary));
+                OnPropertyChanged(nameof(ReferencePhaseIncrementSummary)); OnPropertyChanged(nameof(SignalPhaseIncrementSummary));
+                RaiseLargeGraphProperties(); RaiseCommandStates();
+            }
+        }
         public string ReferencePhaseIncrementSummary => ProcessingResult?.NotebookProfile != null ? "기준 위상 증가량 중앙값: 미산출 · 위상 증가량 그래프 참조" : "기준 위상 증가량 중앙값: " + ProcessingResult?.KLinearization?.MedianPhaseIncrementRadians.ToString("G9") + " rad";
         public string SignalPhaseIncrementSummary => ProcessingResult?.NotebookProfile != null ? "측정 위상 증가량 중앙값: 미산출 · 위상 증가량 그래프 참조" : "측정 위상 증가량 중앙값: " + ProcessingResult?.SignalKLinearization?.MedianPhaseIncrementRadians.ToString("G9") + " rad";
         public bool HasResult { get { return ProcessingResult != null; } }
@@ -263,6 +317,11 @@ namespace OFDR_Signal_Generator.ViewModels
         {
             get
             {
+                if (SelectedSegment != null && ProcessingResult?.DocumentStages?.StrainEnabled == true)
+                {
+                    var p = ProcessingResult.DocumentStages.Points[SelectedSegment.SegmentIndex];
+                    return string.Format(CultureInfo.InvariantCulture, "위치 {0:F4} m · 창 {1:F4}~{2:F4} m · strain 후보 {3:+0.000;-0.000;0.000} με · Δλ {4:+0.000;-0.000;0.000} pm · {5} · 미교정 환산", p.DistanceMeters, p.WindowStartMeters, p.WindowEndMeters, p.CandidateStrainMicrostrain, p.CandidateShiftPm, p.Status);
+                }
                 if (SelectedSegment != null && ProcessingResult?.NotebookProfile != null)
                     return string.Format(CultureInfo.InvariantCulture, "lag 진단 · Segment {0:N0} · FFT 시작 bin {1:N0} · lag {2:+0.000;-0.000;0.000} sample · 상관 {3:G6}", SelectedSegment.SegmentIndex, SelectedSegment.SegmentStartFftBin, SelectedSegment.PeakLagBins, SelectedSegment.PeakMagnitude);
                 return SelectedSegment == null ? "Segment 처리 후 peak 정보가 표시됩니다."
@@ -274,8 +333,8 @@ namespace OFDR_Signal_Generator.ViewModels
         public string KLinearizationFlowDescription => ProcessingResult?.Config?.StageComparisonEnabled == true ? ProcessingResult.Config.StageComparison.Description : ProcessingResult?.Config?.NotebookReproduction == true
             ? "노트북 비교: 확정 crop에 채널 offset을 적용하고 각 AUX를 DC 제거 없이 Hilbert/unwrap/위상 정렬합니다. 각 sweep endpoint span에 독립 보간하며 공통 span 정렬을 하지 않습니다."
             : "각 sweep의 보조간섭계를 독립 위상 추출·보간한 뒤 더 짧은 공통 상대 위상 범위와 같은 샘플 수로 Ref/Sig를 맞춥니다.";
-        public string ProfileStageTitle => ProcessingResult?.NotebookProfile != null ? "화면 9 · 프로파일별 상관 lag (단계별/노트북 비교)" : "화면 9 · 거리별 Rayleigh Spectral Shift";
-        public string StrainStageTitle => ProcessingResult?.NotebookProfile != null ? "화면 10 · strain 미산출 (미교정 lag 진단)" : "화면 10 · 거리별 Strain 결과";
+        public string ProfileStageTitle => ProcessingResult?.DocumentStages?.StrainEnabled == true ? "화면 9 · 위치별 Spectral shift (상대 기준)" : ProcessingResult?.NotebookProfile != null ? "화면 9 · 프로파일별 상관 lag (단계별/노트북 비교)" : "화면 9 · 거리별 Rayleigh Spectral Shift";
+        public string StrainStageTitle => ProcessingResult?.DocumentStages?.StrainEnabled == true ? "화면 10 · 위치별 strain 환산 (με; 내부 조건 통과 / 미교정)" : ProcessingResult?.NotebookProfile != null ? "화면 10 · strain 미산출 (물리축 옵션 OFF)" : "화면 10 · 거리별 Strain 결과";
         public string ReferenceMeanRemovalStageTitle => ProcessingResult?.Config?.StageComparisonEnabled == true ? "기준 AUX DC " + (ProcessingResult.Config.StageComparison.RemoveAuxiliaryMean ? "제거" : "유지") : ProcessingResult?.Config?.NotebookReproduction == true ? "기준 AUX 평균 제거 미적용 (노트북 조건)" : "기준 보조간섭계 평균 제거";
 
         public string CalibrationSummary
@@ -403,9 +462,16 @@ namespace OFDR_Signal_Generator.ViewModels
             RefreshPreparedQc(); RaiseCommandStates();
         }
 
-        public async Task RunProcessingAsync()
+        public Task RunProcessingAsync() => RunProcessingCoreAsync(false,null);
+        internal Task RunUnifiedProcessingAsync(string resultsRoot) => RunProcessingCoreAsync(true,resultsRoot);
+        internal void ResetForUnified()
         {
-            if (IsBusy || ModeHopPreview.IsBusy || !InputsSelected()) return;
+            ProcessingResult?.Dispose(); ProcessingResult = null; SelectedSegment = null; preparedInput = null;
+            UseSavedCsvFileInputs = false; RefreshPreparedQc();
+        }
+        private async Task RunProcessingCoreAsync(bool unified, string resultsRoot)
+        {
+            if (IsBusy || (!unified && !LegacyControlsEnabled) || ModeHopPreview.IsBusy || !InputsSelected()) return;
             var qcBlock = ProcessingQcBlockReason;
             if (qcBlock != null) { ReportQcBlock("run_command", ReferenceContext, SignalContext, qcBlock); return; }
             SweepRunRecorder preparedLog = null; Exception preparedFailure = null;
@@ -417,7 +483,7 @@ namespace OFDR_Signal_Generator.ViewModels
                 var signalAuxiliaryProgress = new Progress<OperationProgress>(value => UpdateProgress(value, 7.5, 15.0));
                 var referenceProgress = new Progress<OperationProgress>(value => UpdateProgress(value, 15.0, 22.5));
                 var signalProgress = new Progress<OperationProgress>(value => UpdateProgress(value, 22.5, 30.0));
-                if (preparedInput != null || UseSavedCsvFileInputs) preparedLog = new SweepRunRecorder("prepared_ofdr_analysis", new Dictionary<string, string> { ["diagnostic_mode"] = AllowFailedPhaseQcForDiagnostics.ToString(), ["ref_auxiliary"] = AuxiliaryPath, ["sig_auxiliary"] = SignalAuxiliaryPath, ["reference"] = ReferencePath, ["signal"] = SignalPath });
+                if (preparedInput != null || UseSavedCsvFileInputs) preparedLog = new SweepRunRecorder("prepared_ofdr_analysis", new Dictionary<string, string> { ["diagnostic_mode"] = AllowFailedPhaseQcForDiagnostics.ToString(), ["ref_auxiliary"] = AuxiliaryPath, ["sig_auxiliary"] = SignalAuxiliaryPath, ["reference"] = ReferencePath, ["signal"] = SignalPath }, resultsRoot);
                 var input = preparedInput ?? (UseSavedCsvFileInputs ? await Task.Run(() => new DiagnosedCsvInputReader().Read(AuxiliaryPath, SignalAuxiliaryPath, ReferencePath, SignalPath, cancellation.Token, auxiliaryProgress)) : await Task.Run(() => new IndependentOfdrInput
                 {
                     Auxiliary = channelReader.Read(AuxiliaryPath, 1, cancellation.Token, auxiliaryProgress),
@@ -472,6 +538,7 @@ namespace OFDR_Signal_Generator.ViewModels
                 var processingProgress = new Progress<OperationProgress>(value => UpdateProgress(value, 30.0, 100.0));
                 engine = new IndependentOfdrProcessingEngine();
                 if (preparedLog != null) JsonContractSerializer.Write(Path.Combine(preparedLog.DirectoryPath, "processing_config.json"), config);
+                if (config.StageComparison.Document.Enabled) config.StageComparison.Document.WavelengthNm = config.CenterWavelengthNm;
                 var result = await Task.Run(() => engine.Run(input, config, cancellation.Token, processingProgress));
                 if (ProcessingResult != null) ProcessingResult.Dispose();
                 ProcessingResult = result;
@@ -484,6 +551,15 @@ namespace OFDR_Signal_Generator.ViewModels
                     }
                 }
                 if (preparedLog != null) JsonContractSerializer.Write(Path.Combine(preparedLog.DirectoryPath, "result.json"), result);
+                if (preparedLog != null && result.DocumentStages != null)
+                {
+                    JsonContractSerializer.Write(Path.Combine(preparedLog.DirectoryPath, "effective_processing_config.json"), result.Config);
+                    using (var writer = new StreamWriter(Path.Combine(preparedLog.DirectoryPath, "document_quality.csv")))
+                    {
+                        writer.WriteLine("distance_m,candidate_shift_pm,lag,peak_zncc,second_peak,separation,overlap,status,window_start_m,window_end_m,candidate_strain_microstrain,accepted_strain_microstrain");
+                        foreach (var p in result.DocumentStages.Points) writer.WriteLine(string.Join(",", new[] { p.DistanceMeters, p.CandidateShiftPm, p.CandidateLag, p.PeakZncc, p.SecondPeak, p.Separation, p.Overlap }.Select(v => v.ToString("R", CultureInfo.InvariantCulture))) + "," + p.Status + "," + string.Join(",", new[] { p.WindowStartMeters, p.WindowEndMeters, p.CandidateStrainMicrostrain ?? double.NaN, p.AcceptedStrainMicrostrain ?? double.NaN }.Select(v => v.ToString("R", CultureInfo.InvariantCulture))));
+                    }
+                }
                 SelectedSegment = result.SelectedSegment;
                 SelectedSegmentIndex = result.SelectedSegment.SegmentIndex;
                 ProgressPercent = 100.0;
@@ -630,6 +706,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
         private void RaiseLargeGraphProperties()
         {
+            OnPropertyChanged(nameof(LargeGraphFftSource));
             OnPropertyChanged(nameof(LargeGraphPrimaryValues));
             OnPropertyChanged(nameof(LargeGraphSecondaryValues));
             OnPropertyChanged(nameof(LargeGraphMarkers));
@@ -641,7 +718,12 @@ namespace OFDR_Signal_Generator.ViewModels
 
         private void RaiseCommandStates()
         {
+            OnPropertyChanged(nameof(ReflectogramManualEnabled)); OnPropertyChanged(nameof(ZnccManualEnabled));
+            Unified?.Refresh();
+            Reflectogram?.Refresh();
+            DistributedComparison?.Refresh();
             StageLegacyPresetCommand?.RaiseCanExecuteChanged(); StageNotebookPresetCommand?.RaiseCanExecuteChanged();
+            DocumentNominalPresetCommand?.RaiseCanExecuteChanged(); DocumentPhasePresetCommand?.RaiseCanExecuteChanged(); DocumentDelayPresetCommand?.RaiseCanExecuteChanged();
             FinalComparison?.Refresh();
             UseSavedCsvFilesCommand?.RaiseCanExecuteChanged();
             ModeHopPreview.SweepPreparation.RefreshCommands(); UseLegacyInputsCommand?.RaiseCanExecuteChanged();
@@ -665,6 +747,9 @@ namespace OFDR_Signal_Generator.ViewModels
 
         public void Dispose()
         {
+            Unified.Dispose();
+            Reflectogram.Dispose();
+            DistributedComparison.Dispose();
             ModeHopPreview.Dispose();
             cancellation?.Cancel();
             cancellation?.Dispose();

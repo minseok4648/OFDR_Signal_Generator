@@ -4,13 +4,28 @@
              MinHeight="220"
              MinWidth="300"
              ToolTip="휠: 확대/축소 · 드래그: 영역 확대 · 우클릭: 이전 · 더블클릭: 전체">
-    <Border Background="#FF0F172A"
+    <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <StackPanel x:Name="FftRangePanel" Visibility="Collapsed" Margin="4,0,4,4">
+            <WrapPanel VerticalAlignment="Center">
+                <TextBlock Text="표시 범위 " VerticalAlignment="Center"/>
+                <TextBox x:Name="FftRangeStart" Width="80" Margin="2" ToolTip="시작 거리(m) 또는 FFT bin" AutomationProperties.AutomationId="FftRangeStart"/>
+                <TextBlock Text="~" VerticalAlignment="Center"/>
+                <TextBox x:Name="FftRangeEnd" Width="80" Margin="2" ToolTip="끝 거리(m) 또는 FFT bin" AutomationProperties.AutomationId="FftRangeEnd"/>
+                <Button Content="범위 적용" Click="ApplyFftRange_OnClick" Padding="6,2" Margin="2" AutomationProperties.AutomationId="ApplyFftRange"/>
+                <Button Content="Y 자동" Click="AutoY_OnClick" Padding="6,2" Margin="2"/>
+                <TextBlock x:Name="FftRangeUnit" VerticalAlignment="Center" Margin="4,0"/>
+            </WrapPanel>
+            <TextBlock x:Name="FftResolutionText" FontSize="11" Foreground="#475569" TextWrapping="Wrap"/>
+        </StackPanel>
+    <Border Grid.Row="1" Background="#FF0F172A"
             BorderBrush="#FFCBD5E1"
             BorderThickness="1"
             CornerRadius="10"
             Padding="4">
         <Grid>
             <Canvas x:Name="PlotCanvas"
+                    SizeChanged="PlotCanvas_OnSizeChanged"
                     ClipToBounds="True"
                     Background="Transparent"
                     MouseMove="PlotCanvas_OnMouseMove"
@@ -82,4 +97,5 @@
                        Text="표시할 데이터가 없습니다." />
         </Grid>
     </Border>
+    </Grid>
 </UserControl>

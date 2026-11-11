@@ -37,8 +37,11 @@ namespace OFDR_Signal_Core.Processing
             token.ThrowIfCancellationRequested();
             if (source == null || !source.HasFourChannels) throw new ArgumentException("CH1~4 입력이 필요합니다.");
             if (!Enum.IsDefined(typeof(SweepSelectionMode), mode)) throw new ArgumentOutOfRangeException(nameof(mode));
-            if (mode == SweepSelectionMode.FirstEdgeToRecordingEnd && (source.IsPartialRead || source.FirstSampleIndex != 0))
+            if ((mode == SweepSelectionMode.FirstEdgeToRecordingEnd || mode == SweepSelectionMode.RecordingStartToRecordingEnd) && (source.IsPartialRead || source.FirstSampleIndex != 0))
                 throw new ArgumentException("파일 끝을 지정하려면 일부 구간이 아닌 원본 파일 전체를 읽어야 합니다.");
+            if (mode == SweepSelectionMode.RecordingStartToRecordingEnd)
+                return new List<SweepRange> { new SweepRange { Number = 1, StartIndex = 0, EndIndexExclusive = source.SampleCount,
+                    StartSeconds = 0, EndSeconds = source.DurationSeconds, StartSpecifiedAtRecordStart = true, EndSpecifiedAtRecordEnd = true } };
             if (source.CompleteSweeps == null)
             {
                 var edges = new List<int>();

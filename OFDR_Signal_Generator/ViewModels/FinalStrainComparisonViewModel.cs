@@ -27,6 +27,7 @@ namespace OFDR_Signal_Generator.ViewModels
         public double[] YValues { get; }
         public bool IsNotebook { get; }
         public bool IsReference { get; }
+        public DocumentStageResult DocumentQuality { get; }
         public string ProcessingConditions { get; }
         private readonly string notebookReference, notebookSignal;
         private readonly double notebookPhaseRatio;
@@ -35,9 +36,19 @@ namespace OFDR_Signal_Generator.ViewModels
         public string RecordedTime => recordedAtUtc.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
         public string Reference => IsNotebook ? notebookReference : Snapshot.ReferenceId;
         public string Signal => IsNotebook ? notebookSignal : Snapshot.SignalId;
-        public string Quality => IsNotebook ? string.Format(CultureInfo.InvariantCulture, "진단 · {0} · 위상 지표 {1:P2}", notebookPhaseQcPassed == true ? "QC 통과" : notebookPhaseQcPassed == false ? "QC 불합격" : "미교정", notebookPhaseRatio)
+        public string Quality => DocumentQuality != null ? "상대 기준 후보 · 유효 " + DocumentQuality.Points.Count(p => p.Valid) + "/" + DocumentQuality.Points.Count
+            : IsNotebook ? string.Format(CultureInfo.InvariantCulture, "진단 · {0} · 위상 지표 {1:P2}", notebookPhaseQcPassed == true ? "QC 통과" : notebookPhaseQcPassed == false ? "QC 불합격" : "미교정", notebookPhaseRatio)
             : (Snapshot.IsDiagnosticAnalysis ? "진단 · " : "") + (Snapshot.InputPhaseQcPassed ? "QC 통과" : "QC 불합격");
-        public string Range => string.Format(CultureInfo.InvariantCulture, "{0:G6}~{1:G6} {2}", XValues[0], XValues.Last(), IsNotebook ? "index" : "m");
+        public string Range => string.Format(CultureInfo.InvariantCulture, "{0:G6}~{1:G6} {2}", XValues[0], XValues.Last(), IsNotebook && DocumentQuality == null ? "index" : "m");
+        internal StrainComparisonEntry(IndependentOfdrProcessingResult result, int number, string name, Brush brush, bool strain = false)
+        {
+            DocumentQuality = JsonContractSerializer.Clone(result.DocumentStages); IsNotebook = true; Number = number;
+            Name = string.IsNullOrWhiteSpace(name) ? "문서 비교 " + number : name; LineBrush = brush; recordedAtUtc = DateTime.UtcNow;
+            notebookReference = result.ReferenceId; notebookSignal = result.SignalId;
+            XValues = DocumentQuality.Points.Select(p => p.DistanceMeters).ToArray();
+            YValues = DocumentQuality.Points.Select(p => p.Valid ? (strain ? p.CandidateStrainMicrostrain ?? double.NaN : p.CandidateShiftPm) : double.NaN).ToArray();
+            ProcessingConditions = result.Config.StageComparison.Description + " / " + DocumentQuality.Summary;
+        }
         public StrainComparisonEntry(StrainComparisonSnapshot snapshot, int number, string name, Brush brush)
         {
             Snapshot = snapshot; Number = number; Name = string.IsNullOrWhiteSpace(name) ? "결과 " + number : name.Trim(); LineBrush = brush;
@@ -64,6 +75,11 @@ namespace OFDR_Signal_Generator.ViewModels
         private readonly Func<bool> idle;
         private readonly ObservableCollection<StrainComparisonEntry> entries = new ObservableCollection<StrainComparisonEntry>();
         private readonly ObservableCollection<StrainComparisonEntry> notebookEntries = new ObservableCollection<StrainComparisonEntry>();
+        private readonly ObservableCollection<StrainComparisonEntry> documentEntries = new ObservableCollection<StrainComparisonEntry>();
+        private readonly ObservableCollection<StrainComparisonEntry> documentStrainEntries = new ObservableCollection<StrainComparisonEntry>();
+        private readonly ReadOnlyObservableCollection<StrainComparisonEntry> documentStrainView;
+        private readonly ReadOnlyObservableCollection<StrainComparisonEntry> documentView;
+        private int documentSequence;
         private readonly ReadOnlyObservableCollection<StrainComparisonEntry> strainView, notebookView;
         private static readonly Brush[] Colors = { Brushes.DeepSkyBlue, Brushes.Orange, Brushes.LimeGreen, Brushes.Violet, Brushes.Gold, Brushes.HotPink, Brushes.Turquoise, Brushes.Coral, Brushes.CornflowerBlue, Brushes.YellowGreen };
         private readonly HashSet<Color> usedColors = new HashSet<Color>();
@@ -76,31 +92,34 @@ namespace OFDR_Signal_Generator.ViewModels
         private bool isBusy;
         private CancellationTokenSource notebookCancellation;
         private Task notebookTask = Task.CompletedTask;
-        public ReadOnlyObservableCollection<StrainComparisonEntry> Entries => IsNotebookComparison ? notebookView : strainView;
-        public string[] ComparisonModes { get; } = new[] { "거리별 strain", "단계별·노트북 비교 (lag)" };
+        public ReadOnlyObservableCollection<StrainComparisonEntry> Entries => IsDocumentStrainComparison ? documentStrainView : IsDocumentComparison ? documentView : IsNotebookComparison ? notebookView : strainView;
+        public string[] ComparisonModes { get; } = new[] { "거리별 strain", "단계별·노트북 비교 (lag)", "문서 단계 비교 (Δλ 후보 pm)", "문서 단계 strain 환산 (με; 미교정)" };
         public int ComparisonModeIndex
         {
             get => comparisonModeIndex;
             set
             {
-                if (value < 0 || value > 1 || !SetProperty(ref comparisonModeIndex, value)) return;
+                if (value < 0 || value > 3 || !SetProperty(ref comparisonModeIndex, value)) return;
                 OnPropertyChanged(nameof(Entries)); OnPropertyChanged(nameof(PlotTitle)); OnPropertyChanged(nameof(XAxisTitle)); OnPropertyChanged(nameof(YAxisTitle)); Refresh();
             }
         }
         public bool IsNotebookComparison => ComparisonModeIndex == 1;
+        public bool IsDocumentComparison => ComparisonModeIndex == 2;
+        public bool IsDocumentStrainComparison => ComparisonModeIndex == 3;
         public bool IsBusy { get => isBusy; private set { if (SetProperty(ref isBusy, value)) Refresh(); } }
         public bool ControlsEnabled => !IsBusy && idle();
         public string NotebookResultDirectory { get => notebookResultDirectory; set => SetProperty(ref notebookResultDirectory, value); }
-        public string PlotTitle => IsNotebookComparison ? "처리 단계별·노트북 결과 비교 (미교정 lag)" : "거리별 strain 비교 (με)";
-        public string XAxisTitle => IsNotebookComparison ? "프로파일 순번 (FFT bin = 순번 × 각 기록의 이동 간격)" : "거리 (m)";
-        public string YAxisTitle => IsNotebookComparison ? "상관 lag (sample)" : "strain (με)";
+        public string PlotTitle => IsDocumentStrainComparison ? "문서 단계 strain 환산 비교 · 내부 조건 통과 / 미교정" : IsDocumentComparison ? "문서 단계별 Δλ 후보 비교 · 절대 파장 기준 미등록" : IsNotebookComparison ? "처리 단계별·노트북 결과 비교 (미교정 lag)" : "거리별 strain 비교 (με)";
+        public string XAxisTitle => IsDocumentComparison ? "OFDR 상대 거리 (m; 센싱 원점 미등록)" : IsNotebookComparison ? "프로파일 순번 (FFT bin = 순번 × 각 기록의 이동 간격)" : "거리 (m)";
+        public string YAxisTitle => IsDocumentStrainComparison ? "strain 환산 (με; 미교정)" : IsDocumentComparison ? "유효 Δλ 후보 (pm)" : IsNotebookComparison ? "상관 lag (sample)" : "strain (με)";
         public RelayCommand RecordCommand { get; }
         public RelayCommand ClearCommand { get; }
         public RelayCommand LoadNotebookCommand { get; }
         public string RecordName { get => recordName; set => SetProperty(ref recordName, value); }
         public string Status { get => status; private set => SetProperty(ref status, value); }
-        public string CountDescription => "누적 " + Entries.Count + "개 · 표시 " + Entries.Count(e => e.DisplayEnabled) + "개 · " + (IsNotebookComparison ? "순번 / lag (sample)" : "거리 (m) / strain (με)");
-        public string RecordReadiness => currentResult()?.NotebookProfile != null ? "확정 Raw 입력의 전체 처리 결과를 '현재 값 기록'으로 누적할 수 있습니다. Ref 자기상관 기준선도 기록합니다. · 미교정 lag"
+        public string CountDescription => "누적 " + Entries.Count + "개 · 표시 " + Entries.Count(e => e.DisplayEnabled) + "개 · " + (IsDocumentComparison ? "상대 거리 / Δλ 후보 pm" : IsNotebookComparison ? "순번 / lag (sample)" : "거리 (m) / strain (με)");
+        public string RecordReadiness => currentResult()?.DocumentStages != null ? "문서 단계의 Δλ·ZNCC·판정과, 물리축 ON이면 strain 환산도 별도 비교 모드에 함께 기록합니다. 무효점은 0으로 바꾸지 않습니다."
+            : currentResult()?.NotebookProfile != null ? "확정 Raw 입력의 전체 처리 결과를 '현재 값 기록'으로 누적할 수 있습니다. Ref 자기상관 기준선도 기록합니다. · 미교정 lag"
             : IsNotebookComparison ? "261106 C# 계산 결과 · Ref는 자기상관 0 기준선 · 60/80/100은 tek0002 대비 lag · 거리/strain 교정 전"
             : !idle() ? "현재 처리가 끝나면 기록할 수 있습니다."
             : StrainComparisonSnapshot.CanCapture(currentResult()) ? "현재 표시된 완료 결과를 기록합니다. 각 곡선의 QC와 거리 환산값은 기록 시점의 값입니다."
@@ -109,6 +128,8 @@ namespace OFDR_Signal_Generator.ViewModels
         {
             currentResult = result; idle = isIdle; strainView = new ReadOnlyObservableCollection<StrainComparisonEntry>(entries);
             notebookView = new ReadOnlyObservableCollection<StrainComparisonEntry>(notebookEntries);
+            documentView = new ReadOnlyObservableCollection<StrainComparisonEntry>(documentEntries);
+            documentStrainView = new ReadOnlyObservableCollection<StrainComparisonEntry>(documentStrainEntries);
             RecordCommand = new RelayCommand(Record, () => ControlsEnabled && (currentResult()?.NotebookProfile != null || (!IsNotebookComparison && StrainComparisonSnapshot.CanCapture(currentResult()))));
             ClearCommand = new RelayCommand(Clear, () => ControlsEnabled && Entries.Count > 0);
             LoadNotebookCommand = new RelayCommand(() => { _ = LoadNotebookAsync(); }, () => ControlsEnabled);
@@ -155,6 +176,14 @@ namespace OFDR_Signal_Generator.ViewModels
         private void Record()
         {
             if (!RecordCommand.CanExecute(null)) { Status = RecordReadiness; return; }
+            if (currentResult()?.DocumentStages != null)
+            {
+                var entry = new StrainComparisonEntry(currentResult(), ++documentSequence, RecordName, NextBrush());
+                AddEntry(documentEntries, entry); ComparisonModeIndex = 2;
+                if (currentResult().DocumentStages.StrainEnabled)
+                { AddEntry(documentStrainEntries, new StrainComparisonEntry(currentResult(), documentSequence, RecordName, entry.LineBrush, true)); ComparisonModeIndex = 3; }
+                Status = "문서 비교 기록: " + entry.Name + " · " + entry.Quality; Refresh(); return;
+            }
             if (currentResult()?.NotebookProfile != null) { RecordNotebook(); return; }
             try
             {
@@ -237,10 +266,10 @@ namespace OFDR_Signal_Generator.ViewModels
         }
         private void Clear()
         {
-            var active = IsNotebookComparison ? notebookEntries : entries;
+            var active = IsDocumentStrainComparison ? documentStrainEntries : IsDocumentComparison ? documentEntries : IsNotebookComparison ? notebookEntries : entries;
             foreach (var entry in active) entry.PropertyChanged -= EntryPropertyChanged;
             active.Clear();
-            if (!IsNotebookComparison) sequence = 0; else { notebookSequence = 0; notebookReferenceRecorded = false; }
+            if (IsDocumentComparison) documentSequence = 0; else if (!IsNotebookComparison) sequence = 0; else { notebookSequence = 0; notebookReferenceRecorded = false; }
             Status = "현재 비교 기록을 지웠습니다."; Refresh();
         }
         public void Refresh()
@@ -248,7 +277,7 @@ namespace OFDR_Signal_Generator.ViewModels
             OnPropertyChanged(nameof(CountDescription)); OnPropertyChanged(nameof(RecordReadiness));
             OnPropertyChanged(nameof(ControlsEnabled));
             RecordCommand?.RaiseCanExecuteChanged(); ClearCommand?.RaiseCanExecuteChanged(); LoadNotebookCommand?.RaiseCanExecuteChanged();
-            foreach (var entry in entries.Concat(notebookEntries)) entry.DeleteCommand?.RaiseCanExecuteChanged();
+            foreach (var entry in entries.Concat(notebookEntries).Concat(documentEntries).Concat(documentStrainEntries)) entry.DeleteCommand?.RaiseCanExecuteChanged();
         }
     }
 }

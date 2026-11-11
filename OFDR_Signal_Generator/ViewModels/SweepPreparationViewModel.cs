@@ -92,11 +92,17 @@ namespace OFDR_Signal_Generator.ViewModels
             get => selectionMode == SweepSelectionMode.CompleteSweeps;
             set { if (value) SetSelectionMode(SweepSelectionMode.CompleteSweeps); }
         }
+        public bool UseWholeRecording
+        {
+            get => selectionMode == SweepSelectionMode.RecordingStartToRecordingEnd;
+            set { if (value) SetSelectionMode(SweepSelectionMode.RecordingStartToRecordingEnd); }
+        }
         private void SetSelectionMode(SweepSelectionMode value)
         {
             if (!CanEdit || selectionMode == value) return;
             selectionMode = value;
             OnPropertyChanged(nameof(UseCompleteSweeps)); OnPropertyChanged(nameof(UseRecordingStartAsSweepStart)); OnPropertyChanged(nameof(UseFirstRisingEdgeToRecordEnd));
+            OnPropertyChanged(nameof(UseWholeRecording));
             OnSourceLoaded(parent.LoadedRecording);
         }
         public IReadOnlyList<string> Roles { get; } = new[] { "Ref", "Signal" };
@@ -132,7 +138,8 @@ namespace OFDR_Signal_Generator.ViewModels
             SelectedSweep = Sweeps != null && Sweeps.Count > 0 ? Sweeps[0] : null;
             Status = source == null ? "원본을 읽으세요. 확정된 Ref/Signal 입력은 유지됩니다." : !source.HasFourChannels ? "현재 파일은 기존 2채널 형식입니다. 스윕 입력 생성에는 CH1~4가 필요합니다."
                 : Sweeps.Count == 0 ? UseFirstRisingEdgeToRecordEnd ? "CH1 상승 엣지가 없어 파일 끝까지 사용할 시작점을 정할 수 없습니다. CH1이 처음부터 High인 상태만으로는 상승 엣지로 판단하지 않습니다."
-                    : UseRecordingStartAsSweepStart ? "CH1 상승 에지가 없어 기록 시작 수동 스윕의 끝을 정할 수 없습니다." : "완전한 스윕이 없습니다. 사용 범위에서 '기록 시작 → 첫 상승 엣지' 또는 '첫 상승 엣지 → 파일 끝'을 선택할 수 있습니다."
+                    : UseRecordingStartAsSweepStart ? "CH1 상승 에지가 없어 기록 시작 수동 스윕의 끝을 정할 수 없습니다." : "완전한 스윕이 없습니다. 사용 범위에서 '기록 시작 → 첫 상승 엣지', '첫 상승 엣지 → 파일 끝' 또는 '기록 시작 → 기록 끝'을 선택할 수 있습니다."
+                : UseWholeRecording ? "기록 시작부터 마지막 샘플까지 전체 기록을 사용 범위로 지정했습니다. CH1 상승 엣지 유무와 관계없이 사용하며, 한 주기의 완전한 스윕으로 자동 판정하지 않습니다. 아래에서 진단할 구간을 선택하세요."
                 : UseFirstRisingEdgeToRecordEnd ? "첫 CH1 상승 엣지부터 마지막 샘플까지를 사용 범위로 지정했습니다. 중간의 다른 상승 엣지도 포함하며, 한 주기의 완전한 스윕으로 자동 판정하지 않습니다. 아래에서 진단할 구간을 선택하세요."
                     : "선택 가능 스윕 " + Sweeps.Count + "개" + (UseRecordingStartAsSweepStart ? " (S1: 기록 시작 수동 지정)" : "") + ". 선택 스윕 검토 후 아래 기존 위상 진단 화면에서 구간을 지정하세요.";
         }

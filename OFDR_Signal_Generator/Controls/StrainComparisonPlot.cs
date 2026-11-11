@@ -69,8 +69,8 @@ namespace OFDR_Signal_Generator.Controls
             }
             fullLeft = curves.Min(c => c.XValues[0]); fullRight = curves.Max(c => c.XValues.Last());
             if (fullRight <= fullLeft) { fullLeft -= 0.5; fullRight += 0.5; }
-            fullBottom = Math.Min(0, curves.Min(c => c.YValues.Where(v => !double.IsNaN(v)).Min()));
-            fullTop = Math.Max(0, curves.Max(c => c.YValues.Where(v => !double.IsNaN(v)).Max()));
+            fullBottom = Math.Min(0, curves.Min(c => c.YValues.Where(v => !double.IsNaN(v) && !double.IsInfinity(v)).DefaultIfEmpty(0).Min()));
+            fullTop = Math.Max(0, curves.Max(c => c.YValues.Where(v => !double.IsNaN(v) && !double.IsInfinity(v)).DefaultIfEmpty(0).Max()));
             var padding = Math.Max(1e-9, (fullTop - fullBottom) * 0.06);
             if (fullBottom == fullTop) padding = 1;
             fullBottom -= padding; fullTop += padding;

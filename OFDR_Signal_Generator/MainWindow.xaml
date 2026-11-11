@@ -44,11 +44,38 @@
         </Style>
     </Window.Resources>
 
-    <TabControl x:Name="WorkspaceTabs" Margin="8" SelectedIndex="{Binding WorkspaceSelectedTab}">
-        <TabItem Header="전체 신호 / Mode hop">
+    <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Border Margin="8,8,8,0" Padding="10" Background="White" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="8">
+      <StackPanel DataContext="{Binding Unified}">
+        <Grid IsEnabled="{Binding ControlsEnabled}">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="45"/><ColumnDefinition Width="*"/><ColumnDefinition Width="95"/><ColumnDefinition Width="55"/><ColumnDefinition Width="*"/><ColumnDefinition Width="95"/></Grid.ColumnDefinitions>
+          <TextBlock Text="Ref" VerticalAlignment="Center"/>
+          <TextBox Grid.Column="1" Text="{Binding ReferencePath, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="UnifiedReferencePath" Margin="0,0,6,6"/>
+          <Button Grid.Column="2" Content="Ref 선택" Command="{Binding BrowseReferenceCommand}"/>
+          <TextBlock Grid.Column="3" Text="Signal" VerticalAlignment="Center"/>
+          <TextBox Grid.Column="4" Text="{Binding SignalPath, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="UnifiedSignalPath" Margin="0,0,6,6"/>
+          <Button Grid.Column="5" Content="Sig 선택" Command="{Binding BrowseSignalCommand}"/>
+        </Grid>
+        <WrapPanel>
+          <Button Content="전체 분석 실행" Command="{Binding RunCommand}" AutomationProperties.AutomationId="UnifiedRun"/>
+          <Button Content="취소" Command="{Binding CancelCommand}"/>
+          <Button Content="현재 선택 가져오기" Command="{Binding UseCurrentSelectionCommand}"/>
+          <Button Content="결과 폴더" Command="{Binding OpenResultsCommand}"/>
+          <Button Content="기존 결과 보기" Command="{Binding ShowGeneralCommand}"/>
+          <Button Content="Reflectogram 보기" Command="{Binding ShowReflectogramCommand}"/>
+          <Button Content="ZNCC 보기" Command="{Binding ShowZnccCommand}"/>
+        </WrapPanel>
+        <TextBlock Text="{Binding StageSummary}" FontWeight="SemiBold" Foreground="#0F766E" AutomationProperties.AutomationId="UnifiedStages"/>
+        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" FontSize="11" MaxHeight="42" AutomationProperties.AutomationId="UnifiedStatus"/>
+        <TextBlock Text="Ref·Signal 두 취득 · 진단 실행(QC 미통과 표시 유지) · 기존: 전체 mask 후 일반 처리 / Reflectogram: 정상 구간 전력 평균 / ZNCC: 취득별 최장 정상 구간 B/C. 세부 설정은 각 탭을 사용합니다." TextWrapping="Wrap" Foreground="#64748B" FontSize="10"/>
+      </StackPanel>
+    </Border>
+    <TabControl Grid.Row="1" x:Name="WorkspaceTabs" Margin="8" SelectedIndex="{Binding WorkspaceSelectedTab}">
+        <TabItem Header="전체 신호 / Mode hop" IsEnabled="{Binding LegacyControlsEnabled}">
             <controls:ModeHopPreviewView DataContext="{Binding ModeHopPreview}" />
         </TabItem>
-        <TabItem Header="기존 OFDR 분석">
+        <TabItem Header="기존 OFDR 분석" IsEnabled="{Binding LegacyControlsEnabled}">
     <Grid Margin="14">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="430" />
@@ -139,8 +166,10 @@
                         <StackPanel Margin="10">
                             <GroupBox Header="단계별 처리 비교 · 진단용" Margin="0,0,0,10" AutomationProperties.AutomationId="StageSelectionPanel">
                                 <StackPanel Margin="6">
-                                    <CheckBox Content="단계별 선택 사용 (물리축 OFF / QC 유지)" IsChecked="{Binding StageComparisonEnabled}" AutomationProperties.AutomationId="StageComparisonEnabled"/>
+                                    <CheckBox Content="단계별 선택 사용 (문서 단계는 물리축·strain 환산 지원)" IsChecked="{Binding StageComparisonEnabled}" AutomationProperties.AutomationId="StageComparisonEnabled"/>
                                     <WrapPanel><Button Content="기존 단계 시작값" Command="{Binding StageLegacyPresetCommand}"/><Button Content="노트북 단계 시작값" Command="{Binding StageNotebookPresetCommand}" AutomationProperties.AutomationId="StageNotebookPreset"/></WrapPanel>
+                                    <WrapPanel><Button Content="문서 B · 명목축" Command="{Binding DocumentNominalPresetCommand}" AutomationProperties.AutomationId="DocumentNominalPreset"/><Button Content="문서 C · AUX 위상" Command="{Binding DocumentPhasePresetCommand}" AutomationProperties.AutomationId="DocumentPhasePreset"/><Button Content="문서 D · 지연 추가" Command="{Binding DocumentDelayPresetCommand}" AutomationProperties.AutomationId="DocumentDelayPreset"/></WrapPanel>
+                                    <Button Content="문서 분석 범위 0–15 m" Command="{Binding DocumentCableRangeCommand}" AutomationProperties.AutomationId="DocumentCableRange"/>
                                     <StackPanel IsEnabled="{Binding DataContext.StageComparisonEnabled, RelativeSource={RelativeSource AncestorType=GroupBox}}" DataContext="{Binding Stages}">
                                         <CheckBox Content="1. AUX 평균(DC) 제거" IsChecked="{Binding RemoveAuxiliaryMean}" AutomationProperties.AutomationId="StageRemoveAuxMean"/>
                                         <TextBlock Text="역행 위상 처리"/><ComboBox ItemsSource="{Binding PhaseOrders}" SelectedIndex="{Binding PhaseOrderIndex}" AutomationProperties.AutomationId="StagePhaseOrder"/>
@@ -152,6 +181,37 @@
                                         <UniformGrid Columns="3"><TextBox Text="{Binding OutputSamples, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding AuxiliaryOffset, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding MeasurementOffset, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
                                         <TextBlock Text="최대 |lag| sample / 종료 FFT bin (0: 전체)" TextWrapping="Wrap"/>
                                         <UniformGrid Columns="2"><TextBox Text="{Binding MaximumLagSamples, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding StopFftBin, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
+                                        <GroupBox Header="문서 비교 단계 · 각 옵션을 바꾸고 실행하여 비교">
+                                            <StackPanel Margin="6">
+                                                <CheckBox Content="문서 단계 확장 사용" IsChecked="{Binding Document.Enabled}" AutomationProperties.AutomationId="DocumentEnabled"/>
+                                                <CheckBox Content="1. 연속 정상 구간 선택 (접합 경계 분리)" IsChecked="{Binding Document.SelectContinuousRange}" AutomationProperties.AutomationId="DocumentContinuous"/>
+                                                <TextBlock Text="Ref / Signal 구간 번호 (-1: 각 취득의 최장 구간, 0부터 시작) / 최소 samples" TextWrapping="Wrap"/>
+                                                <UniformGrid Columns="3"><TextBox Text="{Binding Document.ReferenceRangeIndex, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding Document.SignalRangeIndex, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding Document.MinimumRangeSamples, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
+                                                <CheckBox Content="2. AUX 대역통과 필터" IsChecked="{Binding Document.BandpassEnabled}" AutomationProperties.AutomationId="DocumentBandpass"/>
+                                                <CheckBox Content="샘플률에 맞춰 필터 상한 자동 제한 (요청≥Fs/2일 때 0.45×Fs)" IsChecked="{Binding Document.AutoLimitBandpass}" AutomationProperties.AutomationId="DocumentAutoBandpass"/>
+                                                <TextBlock Text="하한 MHz / 상한 MHz / 양 끝 추가 제외 us"/>
+                                                <UniformGrid Columns="3"><TextBox Text="{Binding Document.LowMHz, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="DocumentLowMHz"/><TextBox Text="{Binding Document.HighMHz, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="DocumentHighMHz"/><TextBox Text="{Binding Document.EdgeGuardMicroseconds, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
+                                                <TextBlock Text="필터: 2차 Butterworth HP+LP 양방향, 반사 padding. 문서의 종류·차수는 미확인. guard와 Fs/2 조건을 검증하세요." TextWrapping="Wrap" Foreground="#475569"/>
+                                                <TextBlock Text="3. AUX 지연 정렬 (양수: AUX 앞당김, 선형 fractional 보간)" TextWrapping="Wrap"/>
+                                                <ComboBox ItemsSource="{Binding DocumentDelayModes}" SelectedIndex="{Binding DocumentDelayIndex}" AutomationProperties.AutomationId="DocumentDelayMode"/>
+                                                <TextBlock Text="수동 us / 목표 OFDR 상대 거리 m / AUX 왕복 차등 지연 us"/>
+                                                <UniformGrid Columns="3"><TextBox Text="{Binding Document.DelayMicroseconds, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="DocumentDelayUs"/><TextBox Text="{Binding Document.ReflectionDistanceMeters, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding Document.AuxiliaryDelayMicroseconds, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
+                                                <CheckBox Content="4. 명목 sweep 축 대조군 (해제: AUX 위상 grid)" IsChecked="{Binding Document.UseNominalGrid}" AutomationProperties.AutomationId="DocumentNominalGrid"/>
+                                                <TextBlock Text="명목 sweep nm/s / 중심 파장 nm / 군굴절률"/>
+                                                <UniformGrid Columns="3"><TextBox Text="{Binding Document.NominalSweepNmPerSecond, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding DataContext.CenterWavelengthNm, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding Document.GroupIndex, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
+                                                <CheckBox Content="취득 진행 방향: 파장 증가 (해제: 파장 감소)" IsChecked="{Binding Document.IncreasingWavelength}"/>
+                                                <CheckBox Content="5. 상대 거리 단위로 Window/출력 간격 지정" IsChecked="{Binding Document.PhysicalWindow}" AutomationProperties.AutomationId="DocumentPhysicalWindow"/>
+                                                <TextBlock Text="창 길이 m / 출력 간격 m / 시작 m / 끝 m"/>
+                                                <UniformGrid Columns="4"><TextBox Text="{Binding Document.GaugeMeters, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding Document.HopMeters, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding Document.StartMeters, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding Document.EndMeters, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
+                                                <TextBlock Text="6. 상관 방법 (ZNCC는 평균 제거·정규화·배율 1을 자체 적용)" TextWrapping="Wrap"/>
+                                                <ComboBox ItemsSource="{Binding DocumentCorrelations}" SelectedIndex="{Binding DocumentCorrelationIndex}" AutomationProperties.AutomationId="DocumentCorrelation"/>
+                                                <TextBlock Text="최대 |이동| pm / 최소 중첩률 / 최고점 제외 반경 pm"/>
+                                                <UniformGrid Columns="3"><TextBox Text="{Binding Document.MaximumShiftPm, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding Document.MinimumOverlap, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding Document.PeakExclusionPm, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
+                                                <TextBlock Text="7. 품질 선별: 최소 ZNCC / 최소 최고-차순위 격차"/>
+                                                <UniformGrid Columns="2"><TextBox Text="{Binding Document.MinimumZncc, UpdateSourceTrigger=PropertyChanged}"/><TextBox Text="{Binding Document.MinimumSeparation, UpdateSourceTrigger=PropertyChanged}"/></UniformGrid>
+                                                <TextBlock Text="B/C/D는 확정된 동일 입력과 mask에 적용합니다. Ref/Signal 구간 번호는 파장 매칭을 보증하지 않습니다. 공통 상대 grid · 기존 sample offset 0/0 필요. Δλ는 상대 기준 후보이며 절대 파장·센싱 입구·strain 교정은 별도입니다." TextWrapping="Wrap" Foreground="#9A3412"/>
+                                            </StackPanel>
+                                        </GroupBox>
                                     </StackPanel>
                                     <TextBlock Text="아래 Window 종류·Segment·이동 간격·IFFT padding·상관 정규화도 적용됩니다. 시작값은 출력 524288점입니다. 동일 입력에서 한 항목씩 변경하고 전체 처리 후 현재 값을 기록하세요. 순번 2500~3000은 hop 50에서 FFT bin 125000~150000이며 거리값이 아닙니다." TextWrapping="Wrap" Foreground="#475569" FontSize="11"/>
                                 </StackPanel>
@@ -204,7 +264,7 @@
 
                             <GroupBox Header="거리축 교정 계수" Margin="0,14,0,4">
                                 <StackPanel>
-                                    <CheckBox IsChecked="{Binding UsePhysicalAxes}" Content="FFT와 Strain 결과에 물리축 적용" Margin="0,0,0,8" />
+                                    <CheckBox IsChecked="{Binding UsePhysicalAxes}" Content="FFT와 Strain 결과에 물리축 적용" AutomationProperties.AutomationId="PhysicalAxesEnabled" Margin="0,0,0,8" />
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,8,0">
@@ -221,7 +281,7 @@
                                     <TextBlock Style="{StaticResource FieldLabel}" Text="거리 Offset (m)" />
                                     <TextBox Text="{Binding DistanceOffsetMeters, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Foreground="#FFB45309" TextWrapping="Wrap" Margin="0,0,0,8"
-                                               Text="18.2703 m를 보조간섭계의 물리 경로차로 사용합니다. spectral 축에는 Group Index를 적용하고, 거리축은 같은 광섬유 굴절률 상쇄를 가정합니다." />
+                                               Text="기본 분석은 위 경로차/Group Index를 사용합니다. 문서 단계는 문서 설정의 AUX 지연(us)/ng를 사용하며, 아래 거리 Offset·기하 계수와 공통 strain 계수를 적용합니다. 물리축 ON은 교정 완료를 뜻하지 않습니다." />
                                 </StackPanel>
                             </GroupBox>
 
@@ -445,7 +505,8 @@
                                                          XAxisTitle="{Binding ProcessingResult.PreKSignalSpectrum.XAxisTitle}" YAxisTitle="{Binding ProcessingResult.PreKSignalSpectrum.YAxisTitle}" />
                                 </GroupBox>
                                 <GroupBox Header="화면 3 · FFT 거리 데이터 · K-linearization 후 · Sig / Ref">
-                                    <controls:SignalPlot Height="250" Values="{Binding ProcessingResult.SignalSpectrum.Values}" SecondaryValues="{Binding ProcessingResult.ReferenceSpectrum.Values}"
+                                    <controls:SignalPlot Height="320" FftSource="{Binding FftPlotSource}" AutomationProperties.AutomationId="DistanceFftPlot"
+                                                         Values="{Binding ProcessingResult.SignalSpectrum.Values}" SecondaryValues="{Binding ProcessingResult.ReferenceSpectrum.Values}"
                                                          XStartValue="{Binding ProcessingResult.SignalSpectrum.XStart}" XEndValue="{Binding ProcessingResult.SignalSpectrum.XEnd}"
                                                          XAxisTitle="{Binding ProcessingResult.SignalSpectrum.XAxisTitle}" YAxisTitle="{Binding ProcessingResult.SignalSpectrum.YAxisTitle}" />
                                 </GroupBox>
@@ -489,9 +550,43 @@
                             <GroupBox Header="선택 그래프 크게 보기" Margin="6,14,6,8">
                                 <StackPanel>
                                     <ComboBox Width="360" HorizontalAlignment="Left" ItemsSource="{Binding LargeGraphOptions}" SelectedItem="{Binding SelectedLargeGraph}" />
-                                    <controls:SignalPlot Height="520" Values="{Binding LargeGraphPrimaryValues}" SecondaryValues="{Binding LargeGraphSecondaryValues}"
+                                    <controls:SignalPlot Height="520" FftSource="{Binding LargeGraphFftSource}" AutomationProperties.AutomationId="LargeGraphPlot"
+                                                         Values="{Binding LargeGraphPrimaryValues}" SecondaryValues="{Binding LargeGraphSecondaryValues}"
                                                          MarkerIndices="{Binding LargeGraphMarkers}" XStartValue="{Binding LargeGraphXStart}" XEndValue="{Binding LargeGraphXEnd}"
                                                          XAxisTitle="{Binding LargeGraphXAxisTitle}" YAxisTitle="{Binding LargeGraphYAxisTitle}" />
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="문서 단계 결과 · 변화량 후보와 유사도/판정" AutomationProperties.AutomationId="DocumentResults">
+                                <GroupBox.Style><Style TargetType="GroupBox"><Style.Triggers><DataTrigger Binding="{Binding ProcessingResult.DocumentStages}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></GroupBox.Style>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding ProcessingResult.DocumentStages.Summary}" TextWrapping="Wrap" Margin="8" AutomationProperties.AutomationId="DocumentSummary"/>
+                                    <GroupBox Header="위치별 strain 환산 · 미교정" AutomationProperties.AutomationId="DocumentStrainResults">
+                                        <GroupBox.Style><Style TargetType="GroupBox"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ProcessingResult.DocumentStages.StrainEnabled}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></GroupBox.Style>
+                                        <StackPanel>
+                                            <TextBlock Text="현재 파장·strain 계수로 계산한 환산값입니다. 위 그래프는 내부 조건 통과, 아래는 불합격을 포함한 전체 후보입니다. 표에서 행을 선택하면 해당 위치의 구간·상관 결과를 확인합니다." TextWrapping="Wrap" Margin="8"/>
+                                            <controls:SignalPlot Height="220" Values="{Binding ProcessingResult.StrainProfile.Values}" XStartValue="{Binding ProcessingResult.StrainProfile.XStart}" XEndValue="{Binding ProcessingResult.StrainProfile.XEnd}" XAxisTitle="위치 (m; 설정 기반)" YAxisTitle="내부 조건 통과 strain (με; 미교정)"/>
+                                            <controls:SignalPlot Height="220" Values="{Binding ProcessingResult.DocumentStages.CandidateStrain.Values}" XStartValue="{Binding ProcessingResult.DocumentStages.CandidateStrain.XStart}" XEndValue="{Binding ProcessingResult.DocumentStages.CandidateStrain.XEnd}" XAxisTitle="위치 (m; 설정 기반)" YAxisTitle="전체 strain 후보 (με; 불합격 포함)"/>
+                                        </StackPanel>
+                                    </GroupBox>
+                                    <controls:SignalPlot Height="230" Values="{Binding ProcessingResult.DocumentStages.AcceptedShift.Values}" XStartValue="{Binding ProcessingResult.DocumentStages.AcceptedShift.XStart}" XEndValue="{Binding ProcessingResult.DocumentStages.AcceptedShift.XEnd}" XAxisTitle="OFDR 상대 거리 (m; 원점 미등록)" YAxisTitle="유효 Δλ 후보 (pm)"/>
+                                    <controls:SignalPlot Height="230" Values="{Binding ProcessingResult.DocumentStages.PeakZncc.Values}" SecondaryValues="{Binding ProcessingResult.DocumentStages.PeakSeparation.Values}" XStartValue="{Binding ProcessingResult.DocumentStages.PeakZncc.XStart}" XEndValue="{Binding ProcessingResult.DocumentStages.PeakZncc.XEnd}" XAxisTitle="OFDR 상대 거리 (m)" YAxisTitle="최대 상관 / 피크 분리도"/>
+                                    <TextBlock Text="ZNCC는 유사도입니다. 변화량은 피크 위치로 계산합니다. 무효 후보는 위 변화량 그래프에서 제외하며 아래 표에는 원인과 후보값을 보존합니다." TextWrapping="Wrap" Margin="8"/>
+                                    <DataGrid ItemsSource="{Binding ProcessingResult.DocumentStages.Points}" SelectedItem="{Binding SelectedDocumentPoint, Mode=TwoWay}" SelectionMode="Single" AutoGenerateColumns="False" IsReadOnly="True" Height="250" EnableRowVirtualization="True" AutomationProperties.AutomationId="DocumentQualityTable">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="위치 m" Binding="{Binding DistanceMeters, StringFormat=F4}"/>
+                                            <DataGridTextColumn Header="창 시작 m" Binding="{Binding WindowStartMeters, StringFormat=F4}"/>
+                                            <DataGridTextColumn Header="창 끝 m" Binding="{Binding WindowEndMeters, StringFormat=F4}"/>
+                                            <DataGridTextColumn Header="strain 후보 με" Binding="{Binding CandidateStrainMicrostrain, StringFormat=F4}"/>
+                                            <DataGridTextColumn Header="통과 strain με" Binding="{Binding AcceptedStrainMicrostrain, StringFormat=F4}"/>
+                                            <DataGridTextColumn Header="Δλ 후보 pm" Binding="{Binding CandidateShiftPm, StringFormat=F4}"/>
+                                            <DataGridTextColumn Header="lag" Binding="{Binding CandidateLag, StringFormat=F4}"/>
+                                            <DataGridTextColumn Header="최고 상관" Binding="{Binding PeakZncc, StringFormat=F4}"/>
+                                            <DataGridTextColumn Header="차순위" Binding="{Binding SecondPeak, StringFormat=F4}"/>
+                                            <DataGridTextColumn Header="분리도" Binding="{Binding Separation, StringFormat=F4}"/>
+                                            <DataGridTextColumn Header="중첩률" Binding="{Binding Overlap, StringFormat=F3}"/>
+                                            <DataGridTextColumn Header="판정" Binding="{Binding Status}" Width="*"/>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
                                 </StackPanel>
                             </GroupBox>
                         </StackPanel>
@@ -555,5 +650,12 @@
         </Grid>
     </Grid>
         </TabItem>
+        <TabItem Header="Reflectogram · 전력 평균" IsEnabled="{Binding ReflectogramManualEnabled}">
+            <controls:ReflectogramView DataContext="{Binding Reflectogram}"/>
+        </TabItem>
+        <TabItem Header="분포 Δλ / ZNCC · 8쪽" IsEnabled="{Binding ZnccManualEnabled}" AutomationProperties.AutomationId="DistributedComparisonTab">
+            <controls:DistributedComparisonView DataContext="{Binding DistributedComparison}"/>
+        </TabItem>
     </TabControl>
+    </Grid>
 </Window>

@@ -33,6 +33,7 @@ namespace OFDR_Harness
                     case "run-pair": return RunPair(options);
                     case "reproduce-notebook-temperature": return NotebookTemperatureCommand.Run(options);
                     case "compare-processing-stages": return StageComparisonCommand.Run(options);
+                    case "compare-document-stages": return DocumentStageCommand.Run(options);
                     case "preview-mode-hop": return ModeHopPreviewCommand.Run(options);
                     case "inspect-mode-hop": options["inspect"] = "true"; return ModeHopPreviewCommand.Run(options);
                     case "validate-four-channel-samples": return FourChannelSampleValidation.Run(options);
@@ -417,6 +418,7 @@ namespace OFDR_Harness
 
         private static int PrintUsage()
         {
+            Console.WriteLine("OFDR_Harness compare-document-stages --ref csv --sig csv [--config path] [--results folder] [--all-ranges]");
             Console.WriteLine("OFDR_Harness reproduce-notebook-temperature [--input folder] [--config path] [--results folder] [--experiment id]");
             Console.WriteLine("OFDR_Harness scan [--input folder] [--manifest path]");
             Console.WriteLine("OFDR_Harness convert [--input folder] [--output folder] [--set id] [--overwrite]");

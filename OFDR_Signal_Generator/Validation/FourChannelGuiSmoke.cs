@@ -81,6 +81,24 @@ namespace OFDR_Signal_Generator.Validation
                 var noEdgeFixture = Path.Combine(directory, "no_edge.csv"); File.WriteAllText(noEdgeFixture, File.ReadAllText(endFixture).Replace(",3.4,", ",1.8,"));
                 fileEndBox.IsChecked = true; await vm.LoadForRoleAsync("Ref", noEdgeFixture); await Smoke.Settle(window);
                 Smoke.Check(metrics, "file_end_without_edge_disables_review", vm.Sweeps.Count == 0 && !vm.ReviewCommand.CanExecute(null) && vm.Status.Contains("상승 엣지가 없어") && ReferenceEquals(endConfirmed, vm.PreparedReference));
+                var wholeRecordingBox = Smoke.Find<RadioButton>(preparationView, "SweepUseWholeRecording");
+                Smoke.Check(metrics, "whole_recording_binding_active_and_opt_in", wholeRecordingBox.IsChecked == false && BindingOperations.GetBindingExpression(wholeRecordingBox, RadioButton.IsCheckedProperty)?.Status == BindingStatus.Active);
+                wholeRecordingBox.IsChecked = true; await Smoke.Settle(window);
+                Smoke.Check(metrics, "whole_recording_no_edge_range_and_exclusive_selection", vm.UseWholeRecording && !vm.UseCompleteSweeps && !vm.UseRecordingStartAsSweepStart && !vm.UseFirstRisingEdgeToRecordEnd
+                    && fileEndBox.IsChecked == false && manualStartBox.IsChecked == false && automaticBox.IsChecked == false && vm.Sweeps.Count == 1
+                    && vm.SelectedSweep.StartIndex == 0 && vm.SelectedSweep.EndIndexExclusive == 4101 && vm.ReviewCommand.CanExecute(null));
+                await vm.ReviewAsync(); await vm.Quality.AnalyzeAsync(); await vm.ConfirmAsync(); await Smoke.Settle(window);
+                Smoke.Check(metrics, "whole_recording_review_diagnosis_confirm_endpoints", vm.PreparedReference?.SampleCount == 4101 && vm.PreparedReference.OriginalIndices[0] == 0
+                    && vm.PreparedReference.OriginalIndices.Last() == 4100 && vm.Quality.MeasurementPlot.Primary.Values.Length <= 10000);
+                var wholeCsv = Path.Combine(directory, "whole_recording_prepared.csv"); await vm.ExportAsync("Ref", wholeCsv); await vm.ImportAsync("Ref", wholeCsv);
+                Smoke.Check(metrics, "whole_recording_csv_both_boundaries", vm.PreparedReference.Metadata.Sweep.StartSpecifiedAtRecordStart && vm.PreparedReference.Metadata.Sweep.EndSpecifiedAtRecordEnd && vm.RefSummary.Contains("기록 시작 → 기록 끝"));
+                Smoke.Snapshot(window, directory, "whole_recording.png");
+                await vm.LoadForRoleAsync("Signal", sigPath); await Smoke.Settle(window);
+                Smoke.Check(metrics, "whole_recording_signal_includes_all_edges", vm.UseWholeRecording && vm.Sweeps.Count == 1 && vm.SelectedSweep.StartIndex == 0 && vm.SelectedSweep.EndIndexExclusive == 6156);
+                var wholeConfirmed = vm.PreparedReference;
+                automaticBox.IsChecked = true; await Smoke.Settle(window);
+                Smoke.Check(metrics, "whole_recording_toggle_restores_automatic_ranges", !vm.UseWholeRecording && wholeRecordingBox.IsChecked == false && vm.Sweeps.Count == 2
+                    && vm.Quality.Quality == null && ReferenceEquals(wholeConfirmed, vm.PreparedReference));
                 automaticBox.IsChecked = true; await Smoke.Settle(window);
                 var infFixture = Fixture(directory, "ch4_infinity_fixture.csv", 4096, recordStart: true, modeHopPulse: true, ch4Infinity: true);
                 await vm.LoadForRoleAsync("Ref", infFixture); await Smoke.Settle(window);
@@ -383,6 +401,7 @@ namespace OFDR_Signal_Generator.Validation
                 Smoke.Check(metrics, "stage_and_fixed_notebook_are_exclusive", !workspace.StageComparisonEnabled && workspace.NotebookReproduction);
                   Smoke.Check(metrics, "stage_options_disabled_after_fixed_preset", !Smoke.Find<ComboBox>(window, "StageGrid").IsEnabled);
                 workspace.NotebookReproduction = false;
+                await VerifyDocumentStages(window, workspace, metrics, directory);
                 workspace.WorkspaceSelectedTab = 0; tabs.SelectedIndex = 0; await Smoke.Settle(window);
                 var overlay = Smoke.Descendants(view).OfType<ModeHopOverlayPlot>().Single();
                 var center = Smoke.InArea(overlay.InteractionArea, 0.5, 0.5);
@@ -471,6 +490,75 @@ namespace OFDR_Signal_Generator.Validation
                 vm.UseCompleteSweeps = true; vm.UseModeHopExclusion = true;
             }
         }
+        private static async Task VerifyDocumentStages(MainWindow window, OfdrWorkspaceViewModel workspace, Smoke.SmokeMetrics metrics, string directory)
+        {
+            workspace.WorkspaceSelectedTab = 1; Smoke.Find<TabControl>(window, "AlgorithmInputTabs").SelectedIndex = 1; await Smoke.Settle(window);
+            foreach (var name in new[] { "DocumentNominalPreset", "DocumentPhasePreset", "DocumentDelayPreset" })
+            {
+                Smoke.Find<Button>(window, name).Command.Execute(null); await Smoke.Settle(window);
+                var enabled = Smoke.Find<CheckBox>(window, "DocumentEnabled");
+                Smoke.Check(metrics, name + "_binding", enabled.IsChecked == true && BindingOperations.GetBindingExpression(enabled, CheckBox.IsCheckedProperty)?.Status == BindingStatus.Active);
+                // Synthetic fixture is sampled at 1 MS/s; never reuse the real 1-12 MHz band.
+                Smoke.Find<TextBox>(window, "DocumentLowMHz").SetCurrentValue(TextBox.TextProperty, "0.001");
+                Smoke.Find<TextBox>(window, "DocumentHighMHz").SetCurrentValue(TextBox.TextProperty, "0.1");
+                Smoke.Find<CheckBox>(window, "DocumentPhysicalWindow").IsChecked = false;
+                workspace.Stages.OutputSamples = 4096; workspace.Stages.Document.MinimumRangeSamples = 16;
+                workspace.Stages.Document.PeakExclusionPm = .0001; workspace.SegmentSize = 128; workspace.SegmentHop = 64;
+                var prior = workspace.ProcessingResult;
+                await workspace.RunProcessingAsync(); await Smoke.Settle(window);
+                var result = workspace.ProcessingResult;
+                Smoke.Check(metrics, name + "_processed", !ReferenceEquals(prior, result) && result?.DocumentStages?.Points.Count > 0 && result.StrainProfile == null);
+                Smoke.Check(metrics, name + "_filter_and_quality", result.Config.StageComparison.Document.BandpassEnabled && result.Config.StageComparison.Document.LowMHz == .001
+                    && result.DocumentStages.Points.All(p => double.IsNaN(p.PeakZncc) || Math.Abs(p.PeakZncc) <= 1.00000001)
+                    && result.DocumentStages.AcceptedShift.Values.Length <= 10000 && !result.DocumentStages.AcceptedShift.Values.Any(double.IsInfinity));
+                workspace.SelectedSegmentIndex = 2; workspace.InspectSegmentCommand.Execute(null);
+                var expected = result.SegmentPeakLags[2];
+                Smoke.Check(metrics, name + "_inspector", double.IsNaN(expected) ? double.IsNaN(workspace.SelectedSegment.PeakLagBins) : Math.Abs(expected - workspace.SelectedSegment.PeakLagBins) < 1e-7);
+                workspace.FinalComparison.RecordName = name; workspace.FinalComparison.RecordCommand.Execute(null);
+                Smoke.Check(metrics, name + "_record_preserves_quality", workspace.FinalComparison.IsDocumentComparison && workspace.FinalComparison.Entries.Last().DocumentQuality.Points.Count == result.DocumentStages.Points.Count);
+            }
+            Smoke.Find<CheckBox>(window, "DocumentBandpass").IsChecked = false; await Smoke.Settle(window);
+            Smoke.Check(metrics, "document_filter_toggle_independent", !workspace.Stages.Document.BandpassEnabled && workspace.Stages.Document.DelayMode == OFDR_Signal_Core.Models.StageDelayMode.ReflectionDistance);
+            Smoke.Find<CheckBox>(window, "DocumentBandpass").BringIntoView(); await Smoke.Settle(window);
+            Smoke.Snapshot(window, directory, "document_stage_controls.png");
+            Smoke.Find<TabControl>(window, "OfdrResultTabs").SelectedIndex = 1; await Smoke.Settle(window);
+            var group = Smoke.Find<GroupBox>(window, "DocumentResults"); group.BringIntoView(); await Smoke.Settle(window);
+            var table = Smoke.Find<DataGrid>(window, "DocumentQualityTable");
+            Smoke.Check(metrics, "document_quality_table_bound", table.Items.Count == workspace.ProcessingResult.DocumentStages.Points.Count && group.IsVisible);
+            Smoke.Snapshot(window, directory, "document_stage_results.png");
+            Smoke.Find<TabControl>(window, "OfdrResultTabs").SelectedIndex = 2; await Smoke.Settle(window);
+            Smoke.Check(metrics, "document_three_conditions_recorded", workspace.FinalComparison.Entries.Count == 3 && workspace.FinalComparison.YAxisTitle.Contains("pm"));
+            Smoke.Snapshot(window, directory, "document_stage_comparison.png");
+            var physicalCheck = Smoke.Find<CheckBox>(window, "PhysicalAxesEnabled"); physicalCheck.IsChecked = true;
+            workspace.DocumentPhasePresetCommand.Execute(null); await Smoke.Settle(window);
+            Smoke.Check(metrics, "document_physical_option_survives_preset", workspace.UsePhysicalAxes && physicalCheck.IsChecked == true);
+            workspace.DocumentCableRangeCommand.Execute(null);
+            Smoke.Check(metrics, "document_15m_range_command", workspace.Stages.Document.StartMeters == 0 && workspace.Stages.Document.EndMeters == 15 && workspace.Stages.Document.PhysicalWindow);
+            workspace.Stages.Document.LowMHz = .001; workspace.Stages.Document.HighMHz = .1; workspace.Stages.Document.PhysicalWindow = false;
+            workspace.Stages.Document.PeakExclusionPm = .0001; workspace.Stages.OutputSamples = 4096;
+            workspace.SegmentSize = 128; workspace.SegmentHop = 64; workspace.CenterWavelengthNm = 1540;
+            await workspace.RunProcessingAsync(); await Smoke.Settle(window);
+            var strainResult = workspace.ProcessingResult;
+            Smoke.Check(metrics, "document_strain_generated", strainResult.DocumentStages.StrainEnabled && strainResult.StrainProfile != null
+                && strainResult.DocumentStages.CandidateStrain.Values.Any(v => !double.IsNaN(v)) && strainResult.PhysicalAxis.Enabled
+                && strainResult.Config.StageComparison.Document.WavelengthNm == 1540);
+            Smoke.Check(metrics, "document_strain_invalid_points_masked", strainResult.DocumentStages.Points.Where(p => !p.Valid).All(p => p.AcceptedStrainMicrostrain == null));
+            Smoke.Find<TabControl>(window, "OfdrResultTabs").SelectedIndex = 1; await Smoke.Settle(window);
+            table.SelectedItem = strainResult.DocumentStages.Points[4]; await Smoke.Settle(window);
+            Smoke.Check(metrics, "document_position_table_selects_inspector", workspace.SelectedSegment.SegmentIndex == 4
+                && Math.Abs(workspace.SelectedSegment.SegmentCenterDistanceMeters - strainResult.DocumentStages.Points[4].DistanceMeters) < 1e-10
+                && workspace.PeakDescription.Contains("strain 후보") && workspace.StrainStageTitle.Contains("환산"));
+            var strainGroup = Smoke.Find<GroupBox>(window, "DocumentStrainResults"); strainGroup.BringIntoView(); await Smoke.Settle(window);
+            Smoke.Check(metrics, "document_strain_panel_visible", strainGroup.IsVisible);
+            Smoke.Snapshot(window, directory, "document_strain_position.png");
+            workspace.FinalComparison.RecordName = "위치별 strain"; workspace.FinalComparison.RecordCommand.Execute(null);
+            Smoke.Check(metrics, "document_strain_record_separate_units", workspace.FinalComparison.IsDocumentStrainComparison && workspace.FinalComparison.Entries.Count == 1
+                && workspace.FinalComparison.YAxisTitle.Contains("με") && workspace.FinalComparison.Entries[0].DocumentQuality.StrainEnabled);
+            workspace.FinalComparison.ComparisonModeIndex = 2;
+            Smoke.Check(metrics, "document_pm_records_preserved", workspace.FinalComparison.Entries.Count == 4 && workspace.FinalComparison.YAxisTitle.Contains("pm"));
+            workspace.FinalComparison.ComparisonModeIndex = 3;
+        }
+
         private static string Fixture(string folder, string name, int period, bool nonmonotonic = false, bool recordStart = false, bool modeHopPulse = false, bool broadbandMeasurement = false, bool ch4Infinity = false, bool firstEdgeOnly = false, bool allChannelInfinity = false, double sampleInterval = 1e-6)
         {
             var path = Path.Combine(folder, name);

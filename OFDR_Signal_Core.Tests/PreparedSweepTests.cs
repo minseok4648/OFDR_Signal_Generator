@@ -119,6 +119,52 @@ namespace OFDR_Signal_Core.Tests
             source = new TekScopeCsvReader().Read(path, token);
             Assert.AreEqual(0, engine.DetectSweeps(source, token, SweepSelectionMode.FirstEdgeToRecordingEnd).Count);
         }
+        [TestMethod] public void WholeRecordingIncludesBothEndpointsWithoutEdgesAndPreservesAutomaticRanges()
+        {
+            var engine = new SweepPreparationEngine(); var path = Csv();
+            foreach (var noEdges in new[] { false, true })
+            {
+                if (noEdges) File.WriteAllText(path, File.ReadAllText(path).Replace(",3.4,", ",1.8,"));
+                var source = new TekScopeCsvReader().Read(path, token);
+                var range = engine.DetectSweeps(source, token, SweepSelectionMode.RecordingStartToRecordingEnd).Single();
+                Assert.AreEqual(0, range.StartIndex); Assert.AreEqual(source.SampleCount, range.EndIndexExclusive);
+                Assert.AreEqual(0, range.StartSeconds); Assert.AreEqual(source.DurationSeconds, range.EndSeconds);
+                Assert.IsTrue(range.StartSpecifiedAtRecordStart && range.EndSpecifiedAtRecordEnd);
+                Assert.IsTrue(range.SelectionDescription.Contains("기록 시작 → 기록 끝"));
+                var slice = engine.Slice(source, range, token);
+                CollectionAssert.AreEqual(source.Auxiliary, slice.Auxiliary);
+                var automatic = engine.DetectSweeps(source, token);
+                Assert.AreEqual(noEdges ? 0 : 2, automatic.Count);
+                engine.DetectSweeps(source, token, SweepSelectionMode.RecordingStartToRecordingEnd);
+                Assert.AreSame(automatic, engine.DetectSweeps(source, token));
+            }
+        }
+        [TestMethod] public void WholeRecordingRejectsPartialInputAndHonorsCancellation()
+        {
+            var engine = new SweepPreparationEngine(); var path = Csv();
+            var partial = new TekScopeCsvReader().ReadUntilSecondSweepStart(path, token);
+            Assert.Throws<ArgumentException>(() => engine.DetectSweeps(partial, token, SweepSelectionMode.RecordingStartToRecordingEnd));
+            var source = new TekScopeCsvReader().Read(path, token);
+            Assert.Throws<OperationCanceledException>(() => engine.DetectSweeps(source, new CancellationToken(true), SweepSelectionMode.RecordingStartToRecordingEnd));
+        }
+        [TestMethod] public void WholeRecordingSavesBothBoundariesAndPairedSourceMapping()
+        {
+            var path = Csv(mask: true); var source = new TekScopeCsvReader().Read(path, token);
+            var prepared = Prepare(path, "Ref", mode: SweepSelectionMode.RecordingStartToRecordingEnd);
+            Assert.AreEqual(0, prepared.OriginalIndices[0]); Assert.AreEqual(source.SampleCount - 1, prepared.OriginalIndices.Last());
+            Assert.IsTrue(prepared.SampleCount < source.SampleCount);
+            for (var i = 0; i < prepared.SampleCount; i++)
+            {
+                Assert.AreEqual(source.Auxiliary[prepared.OriginalIndices[i]], prepared.Auxiliary[i]);
+                Assert.AreEqual(source.Measurement[prepared.OriginalIndices[i]], prepared.Measurement[i]);
+            }
+            var csv = Path.Combine(folder, "whole_recording.csv"); var io = new PreparedSweepCsv();
+            io.Write(prepared, csv, false, token); var copy = io.Read(csv, "Ref", token);
+            Assert.IsTrue(copy.Metadata.Sweep.StartSpecifiedAtRecordStart && copy.Metadata.Sweep.EndSpecifiedAtRecordEnd);
+            Assert.AreEqual(source.SampleCount, copy.Metadata.Sweep.EndIndexExclusive);
+            CollectionAssert.AreEqual(prepared.OriginalIndices, copy.OriginalIndices);
+            CollectionAssert.AreEqual(prepared.Auxiliary, copy.Auxiliary); CollectionAssert.AreEqual(prepared.Measurement, copy.Measurement);
+        }
         [TestMethod] public void FileEndSelectionSavesBoundaryMetadataAndPairedSourceMapping()
         {
             var path = Csv(firstEdgeOnly: true); var prepared = Prepare(path, "Ref", mode: SweepSelectionMode.FirstEdgeToRecordingEnd);

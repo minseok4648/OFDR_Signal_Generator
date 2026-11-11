@@ -39,7 +39,7 @@ namespace OFDR_Signal_Generator.ViewModels
         private string sweepText = "1200";
         private string originText = "0";
         private int maximumPreviewPoints = 10000;
-        private string status = "Tektronix CSV를 선택하세요. CH2=트리거 / CH3=보조간섭계";
+        private string status = "Tek 또는 Index·Time_s 통합 CSV를 선택하세요. CH1=스윕 / CH2=모드홉 / CH3=AUX / CH4=측정";
         private string metadata = "";
         private string summary = "";
         private string resultDirectory = "";
@@ -111,7 +111,7 @@ namespace OFDR_Signal_Generator.ViewModels
 
         private void Browse()
         {
-            var dialog = new OpenFileDialog { Filter = "Tektronix CSV|*.csv", Title = "CH2 트리거 + CH3 보조간섭계 CSV 선택" };
+            var dialog = new OpenFileDialog { Filter = "Tek / Index·Time_s 통합 CSV|*.csv", Title = "4채널 CSV 선택 (CH2 모드홉 + CH3 AUX)" };
             if (dialog.ShowDialog() == true) _ = LoadAsync(dialog.FileName);
         }
 
@@ -151,6 +151,8 @@ namespace OFDR_Signal_Generator.ViewModels
                 SweepPreparation.OnSourceLoaded(recording);
                 OnPropertyChanged(nameof(ManualSweepEnabled)); OnPropertyChanged(nameof(SweepHint));
                 Metadata = string.Format(CultureInfo.InvariantCulture, "{0:N0} samples · {1:G9} μs · {2:G9} s · 원본 시작 {3:G9} s · 전 채널 inf 무시 {5:N0} samples · SHA-256 {4}", loaded.SampleCount, loaded.SampleIntervalSeconds * 1e6, loaded.DurationSeconds, loaded.SourceStartSeconds, loaded.Sha256, loaded.InvalidSampleCount);
+                Metadata += string.Format(CultureInfo.InvariantCulture, " · {0:G9} MS/s · {1}", 1e-6 / loaded.SampleIntervalSeconds,
+                    loaded.Header.TryGetValue("CSV Format", out var format) ? format : "CSV");
                 RefreshSummary();
                 Progress = 100; Status = "전체 신호 읽기 완료. 붉은 음영은 CH2 High·시작 전/종단 추가 제외·전 채널 inf 제외 구간입니다.";
             }

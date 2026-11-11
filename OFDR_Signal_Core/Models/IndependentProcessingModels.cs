@@ -200,6 +200,7 @@ namespace OFDR_Signal_Core.Models
         [DataMember(Order = 23)] public KLinearizationDiagnostics SignalKDiagnostics { get; set; }
         [DataMember(Order = 24)] public PreviewSeries SpectralShiftProfile { get; set; }
         [DataMember(Order = 25)] public string SignalAuxiliaryId { get; set; }
+        [DataMember(Order = 29)] public DocumentStageResult DocumentStages { get; set; }
         [IgnoreDataMember] public Complex[] ReferenceSpectrumValues { get; set; }
         [IgnoreDataMember] public Complex[] SignalSpectrumValues { get; set; }
         [IgnoreDataMember] public int[] SegmentStarts { get; set; }

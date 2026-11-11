@@ -26,6 +26,7 @@ namespace OFDR_Signal_Core.Processing
             public double SortedTimeReverseRatio { get; internal set; }
             public KLinearizationMetrics Metrics { get; internal set; }
             public KLinearizationDiagnostics Diagnostics { get; internal set; }
+            public string RangeDescription { get; internal set; }
             public void Dispose() { Phase = null; Order = null; Measurement = null; }
         }
 
@@ -123,9 +124,33 @@ namespace OFDR_Signal_Core.Processing
         public IndependentOfdrProcessingResult Run(IndependentOfdrInput input, IndependentOfdrProcessingConfig config, CancellationToken token, IProgress<OperationProgress> progress = null)
         {
             config.StageComparison.Validate(config);
+            if (config.StageComparison.Document.Enabled)
+            {
+                using (var r = PrepareDocument(input.Auxiliary, input.Reference, config, true, token))
+                using (var s = PrepareDocument(input.SignalAuxiliary, input.Signal, config, false, token))
+                    return RunPrepared(input, config, r, s, token, progress);
+            }
             using (var r = Prepare(input.Auxiliary.Values, input.Reference.Values, config.StageComparison, config.MaxPreviewPoints, token))
             using (var s = Prepare(input.SignalAuxiliary.Values, input.Signal.Values, config.StageComparison, config.MaxPreviewPoints, token))
                 return RunPrepared(input, config, r, s, token, progress);
+        }
+
+        private PhasePlan PrepareDocument(OfdrChannelData aux, OfdrChannelData measurement, IndependentOfdrProcessingConfig config, bool reference, CancellationToken token)
+        {
+            var options = config.StageComparison; var d = options.Document;
+            var prepared = DocumentStagePreprocessor.Process(aux, measurement, d, reference, config.MaxPreviewPoints, token);
+            var baseOptions = JsonContractSerializer.Clone(options); baseOptions.Document.Enabled = false;
+            var plan = Prepare(prepared.Auxiliary, prepared.Measurement, baseOptions, config.MaxPreviewPoints, token);
+            plan.RangeDescription = prepared.Description; plan.Key = options.PhaseKey;
+            plan.Diagnostics.AuxiliaryRaw = prepared.RawPreview;
+            if (d.UseNominalGrid)
+            {
+                var frequencyRate = 299792458.0 / Math.Pow(d.WavelengthNm * 1e-9, 2) * d.NominalSweepNmPerSecond * 1e-9;
+                var step = 2 * Math.PI * d.AuxiliaryDelayMicroseconds * 1e-6 * frequencyRate * prepared.SampleInterval;
+                for (var i = 0; i < plan.Phase.Length; i++) { plan.Phase[i] = step * i; plan.Order[i] = i; }
+                plan.First = 0; plan.Span = step * (plan.Phase.Length - 1); plan.Count = plan.Phase.Length;
+            }
+            return plan;
         }
 
         public IndependentOfdrProcessingResult RunPrepared(IndependentOfdrInput input, IndependentOfdrProcessingConfig config, PhasePlan r, PhasePlan s,
@@ -140,6 +165,34 @@ namespace OFDR_Signal_Core.Processing
                 if (Math.Sign(rs) != Math.Sign(ss)) throw new ArgumentException("반대 방향 sweep의 공통 위상 grid는 지원하지 않습니다.");
                 rs = ss = Math.Sign(rs) * Math.Min(Math.Abs(rs), Math.Abs(ss));
             }
+            DocumentStageResult document = null;
+            if (options.Document.Enabled)
+            {
+                var d = options.Document;
+                var bandwidth = Math.Abs(rs) / (2 * Math.PI * d.AuxiliaryDelayMicroseconds * 1e-6);
+                var periodicBandwidth = bandwidth * options.OutputSamples / (options.OutputSamples - 1.0);
+                var distancePerBin = 299792458.0 / (2 * d.GroupIndex * periodicBandwidth) * (config.UsePhysicalAxes ? config.DistanceGeometryFactor : 1);
+                var distanceOffset = config.UsePhysicalAxes ? config.DistanceOffsetMeters : 0;
+                if (d.PhysicalWindow)
+                {
+                    var gaugeBins = Math.Round(d.GaugeMeters / distancePerBin);
+                    if (gaugeBins < 4 || gaugeBins > options.OutputSamples / 2) throw new ArgumentException("거리 창이 4 bins 미만이거나 측정 대역을 넘습니다. 구간 대역/창 길이를 확인하세요.");
+                    config.SegmentSize = (int)gaugeBins; config.SegmentHop = Math.Max(1, (int)Math.Round(d.HopMeters / distancePerBin));
+                    if ((d.EndMeters - distanceOffset) / distancePerBin > options.OutputSamples / 2 || d.EndMeters <= distanceOffset) throw new ArgumentException("요청 거리 범위가 유효 FFT 거리를 넘습니다.");
+                    options.StartFftBin = Math.Max(0, (int)Math.Ceiling((d.StartMeters - distanceOffset) / distancePerBin));
+                    options.StopFftBin = Math.Min(options.OutputSamples / 2, (int)Math.Floor((d.EndMeters - distanceOffset) / distancePerBin) + 1);
+                }
+                var frequencyPerLag = periodicBandwidth / (config.SegmentSize * (double)config.SegmentIfftZeroPadFactor);
+                var wavelengthPerLag = Math.Pow(d.WavelengthNm * 1e-9, 2) / 299792458.0 * frequencyPerLag * 1e12;
+                var allowed = Math.Min(config.SegmentSize * (double)config.SegmentIfftZeroPadFactor / 2 - 2, Math.Floor(d.MaximumShiftPm / wavelengthPerLag));
+                if (allowed < 1) throw new ArgumentException("최대 파장 이동 범위가 1 lag보다 작습니다. padding 또는 범위를 늘리세요.");
+                options.MaximumLagSamples = options.MaximumLagSamples == 0 ? (int)allowed : Math.Min(options.MaximumLagSamples, (int)allowed);
+                options.Validate(config, physicalWindowResolved: true);
+                document = new DocumentStageResult { ReferenceRange = r.RangeDescription, SignalRange = s.RangeDescription,
+                    DistancePerBin = distancePerBin, DistanceOffsetMeters = distanceOffset, CommonBandwidthGHz = bandwidth / 1e9,
+                    FrequencyGHzPerLag = frequencyPerLag / 1e9 * (d.IncreasingWavelength ? -1 : 1),
+                    WavelengthPmPerLag = wavelengthPerLag * (d.IncreasingWavelength ? 1 : -1) };
+            }
             progress?.Report(new OperationProgress { Stage = "단계별 비교", Detail = options.Description, Percent = 20 });
             var rv = options.Grid == RelativePhaseGrid.CommonSpanTwoPass ? InterpolateTwoPass(r, options.OutputSamples, rs, token) : Interpolate(r, options.OutputSamples, rs, token);
             var sv = options.Grid == RelativePhaseGrid.CommonSpanTwoPass ? InterpolateTwoPass(s, options.OutputSamples, ss, token) : Interpolate(s, options.OutputSamples, ss, token);
@@ -147,8 +200,10 @@ namespace OFDR_Signal_Core.Processing
             rd.UniformPhaseGrid = PreviewReducer.FromSelector(rv.Length, config.MaxPreviewPoints, i => rs * i / (rv.Length - 1), "Resampled index", "Relative phase (rad)");
             sd.UniformPhaseGrid = PreviewReducer.FromSelector(sv.Length, config.MaxPreviewPoints, i => ss * i / (sv.Length - 1), "Resampled index", "Relative phase (rad)");
             var rf = Spectrum(rv, config, token); var sf = Spectrum(sv, config, token);
-            var profile = Compare(rf, sf, config, token, progress);
-            var valid = Enumerable.Range(0, profile.Shifts.Length).Where(i => ModeHopSettings.IsFinite(profile.Shifts[i])).ToArray();
+            var profile = Compare(rf, sf, config, token, progress, document);
+            var valid = Enumerable.Range(0, profile.Shifts.Length).Where(i => document != null
+                ? profile.Positions[i] - config.SegmentSize / 2 >= 0 && profile.Positions[i] + config.SegmentSize - config.SegmentSize / 2 <= Math.Min(rf.Length, sf.Length)
+                : ModeHopSettings.IsFinite(profile.Shifts[i])).ToArray();
             if (valid.Length == 0) throw new ArgumentException("유효한 segment가 없습니다.");
             var rm = JsonContractSerializer.Clone(r.Metrics); var sm = JsonContractSerializer.Clone(s.Metrics);
             foreach (var m in new[] { rm, sm })
@@ -165,13 +220,26 @@ namespace OFDR_Signal_Core.Processing
                 IsDiagnosticAnalysis = true, InputPhaseQcPassed = rm.PhaseQcPassed == true && sm.PhaseQcPassed == true,
                 PhaseQcSummary = "단계별 진단 · " + options.Description + string.Format(" · 위상 거부 Ref {0:P3} / Sig {1:P3} · 미교정", rm.NonmonotonicRatio, sm.NonmonotonicRatio),
                 NotebookProfile = profile, NotebookReferenceProfile = includeSelfAndRawFft ? Compare(rf, rf, config, token) : null,
+                DocumentStages = document,
                 SegmentStarts = valid.Select(i => profile.Positions[i] - config.SegmentSize / 2).ToArray(),
-                SegmentPeakLags = valid.Select(i => profile.Shifts[i]).ToArray(), SegmentPeakIndices = valid.Select(i => (int)Math.Round(profile.Shifts[i] + config.SegmentSize * config.SegmentIfftZeroPadFactor / 2.0)).ToArray(),
+                SegmentPeakLags = valid.Select(i => profile.Shifts[i]).ToArray(), SegmentPeakIndices = valid.Select(i => ModeHopSettings.IsFinite(profile.Shifts[i]) ? (int)Math.Round(profile.Shifts[i] + config.SegmentSize * config.SegmentIfftZeroPadFactor / 2.0) : -1).ToArray(),
                 SegmentPeakMagnitudes = new double[valid.Length], PhysicalAxis = new PhysicalAxisCalibrationResult { Enabled = false,
                     LocalSpectrumLength = config.SegmentSize * config.SegmentIfftZeroPadFactor, Note = "단계별 비교: profile 순번 / 상관 lag. 절대 거리·GHz·strain으로 해석하지 않습니다. " + options.Description },
                 PeakLagProfile = new PreviewSeries { Values = valid.Select(i => profile.Shifts[i]).ToArray(), XStart = valid.First(), XEnd = valid.Last(), XAxisTitle = "프로파일 순번", YAxisTitle = "상관 lag (sample)" }
             };
             result.SpectralShiftProfile = result.PeakLagProfile;
+            if (document != null)
+            {
+                var passedPhase = rm.PhaseQcPassed == true && sm.PhaseQcPassed == true;
+                foreach (var point in document.Points) if (point.Valid && !passedPhase && !options.Document.UseNominalGrid) point.Status = "PHASE_QC_FAILED";
+                document.AcceptedShift = DocumentPreview(document, config.MaxPreviewPoints, p => p.Valid ? p.CandidateShiftPm : double.NaN, "Δλ 후보 (pm; 상대 기준)");
+                document.PeakZncc = DocumentPreview(document, config.MaxPreviewPoints, p => p.PeakZncc, options.Document.Correlation == StageCorrelationMode.Legacy ? "Legacy correlation" : "Peak ZNCC");
+                document.PeakSeparation = DocumentPreview(document, config.MaxPreviewPoints, p => p.Separation, "최고-차순위");
+                document.Summary = options.Document.Description + "\n" + document.ReferenceRange + "\n" + document.SignalRange
+                    + string.Format(System.Globalization.CultureInfo.InvariantCulture, "\n공통 상대 대역 {0:G6} GHz · 거리 {1:G6} m/bin · Δλ {2:G6} pm/lag · 유효 후보 {3}/{4}. 절대 파장/센싱 거리 원점 미등록, strain 미산출. 정상 구간 번호는 취득별 번호이며 동일 파장 구간임을 보증하지 않습니다.", document.CommonBandwidthGHz, document.DistancePerBin, document.WavelengthPmPerLag, document.Points.Count(p => p.Valid), document.Points.Count);
+                result.SegmentPeakMagnitudes = document.Points.Select(p => p.PeakZncc).ToArray();
+            }
+            DocumentPhysicalAxis.Apply(result);
             if (includeSelfAndRawFft) { result.PreKReferenceSpectrum = RawDb(input.Reference.Values, config, token); result.PreKSignalSpectrum = RawDb(input.Signal.Values, config, token); }
             result.SelectedSegment = Inspect(result, Math.Max(0, Math.Min(valid.Length - 1, 2750 - valid[0])));
             result.PerformanceMetrics.Add(new NamedMetric { Name = "stage_processing_seconds_excluding_phase", Value = watch.Elapsed.TotalSeconds, Unit = "s" });
@@ -219,18 +287,42 @@ namespace OFDR_Signal_Core.Processing
         private PreviewSeries RawDb(double[] x, IndependentOfdrProcessingConfig c, CancellationToken token)
         { token.ThrowIfCancellationRequested(); var a = x.Select(v => new Complex(v, 0)).ToArray(); fft.ForwardInPlace(a); Array.Resize(ref a, a.Length / 2); return Db(a, c); }
 
-        public NotebookTemperatureProfile Compare(Complex[] reference, Complex[] signal, IndependentOfdrProcessingConfig c, CancellationToken token, IProgress<OperationProgress> progress = null)
+        private static PreviewSeries DocumentPreview(DocumentStageResult result, int maximum, Func<StageQualityPoint, double> value, string title)
+        {
+            var points = result.Points;
+            var count = Math.Min(points.Count, maximum); var values = new double[count];
+            for (var i = 0; i < count; i++) values[i] = value(points[count == 1 ? 0 : (int)((long)i * (points.Count - 1) / (count - 1))]);
+            return new PreviewSeries { Values = values, XAxisTitle = "OFDR 상대 거리 (m; 원점 미등록)", YAxisTitle = title,
+                XStart = points.First().DistanceMeters, XEnd = points.Last().DistanceMeters };
+        }
+
+        public NotebookTemperatureProfile Compare(Complex[] reference, Complex[] signal, IndependentOfdrProcessingConfig c, CancellationToken token, IProgress<OperationProgress> progress = null, DocumentStageResult document = null)
         {
             var stop = c.StageComparison.StopFftBin == 0 ? c.StageComparison.OutputSamples / 2 : c.StageComparison.StopFftBin;
-            var count = (stop - 1) / c.SegmentHop + 1; var result = new NotebookTemperatureProfile { Positions = new int[count], Shifts = new double[count] };
+            var first = c.StageComparison.StartFftBin;
+            var count = (stop - first - 1) / c.SegmentHop + 1; var result = new NotebookTemperatureProfile { Positions = new int[count], Shifts = new double[count] };
             var length = c.SegmentSize * c.SegmentIfftZeroPadFactor; var a = new Complex[length]; var b = new Complex[length];
             for (var i = 0; i < count; i++)
             {
-                token.ThrowIfCancellationRequested(); var center = i * c.SegmentHop; var start = center - c.SegmentSize / 2;
+                token.ThrowIfCancellationRequested(); var center = first + i * c.SegmentHop; var start = center - c.SegmentSize / 2;
                 result.Positions[i] = center; result.Shifts[i] = double.NaN;
                 if (start < 0 || start + c.SegmentSize > Math.Min(reference.Length, signal.Length)) continue;
                 FillLocal(a, b, reference, signal, start, c); fft.InverseInPlace(a); fft.InverseInPlace(b);
-                Correlate(a, b, c); result.Shifts[i] = Peak(b, c.StageComparison.MaximumLagSamples);
+                Correlate(a, b, c, token);
+                if (c.StageComparison.Document.Enabled)
+                {
+                    var exclusion = document == null ? 0 : (int)Math.Min(b.Length, Math.Ceiling(c.StageComparison.Document.PeakExclusionPm / Math.Abs(document.WavelengthPmPerLag)));
+                    var point = StageZncc.Evaluate(b, c.StageComparison.MaximumLagSamples, exclusion, c.StageComparison.Document);
+                    result.Shifts[i] = point.CandidateLag;
+                    if (document != null)
+                    {
+                        point.ProfileIndex = i; point.DistanceMeters = document.DistanceOffsetMeters + (c.UsePhysicalAxes ? start + (c.SegmentSize - 1) / 2.0 : center) * document.DistancePerBin;
+                        point.WindowStartMeters = document.DistanceOffsetMeters + start * document.DistancePerBin;
+                        point.WindowEndMeters = document.DistanceOffsetMeters + (start + c.SegmentSize - 1) * document.DistancePerBin;
+                        point.CandidateShiftPm = point.CandidateLag * document.WavelengthPmPerLag; document.Points.Add(point);
+                    }
+                }
+                else result.Shifts[i] = Peak(b, c.StageComparison.MaximumLagSamples);
                 if (i % 500 == 0) progress?.Report(new OperationProgress { Stage = "단계별 비교", Detail = "segment " + i + "/" + count, Percent = 40 + 55.0 * i / count });
             }
             return result;
@@ -241,8 +333,12 @@ namespace OFDR_Signal_Core.Processing
             for (var j = 0; j < c.SegmentSize; j++)
             { var w = Local(c.StageComparison) ? IndependentOfdrProcessingEngine.WindowValue(c.WindowFunction, j, c.SegmentSize) : 1; a[j] = r[start + j] * w; b[j] = s[start + j] * w; }
         }
-        private void Correlate(Complex[] a, Complex[] b, IndependentOfdrProcessingConfig c)
+        private void Correlate(Complex[] a, Complex[] b, IndependentOfdrProcessingConfig c, CancellationToken token)
         {
+            if (c.StageComparison.Document.Enabled && c.StageComparison.Document.Correlation != StageCorrelationMode.Legacy)
+            {
+                StageZncc.Correlate(a, b, c.StageComparison.Document.Correlation, c.StageComparison.Document.MinimumOverlap, fft, token); return;
+            }
             double ma = 0, mb = 0;
             if (c.StageComparison.CenterLocalMagnitudes) { for (var j = 0; j < a.Length; j++) { ma += a[j].Magnitude; mb += b[j].Magnitude; } ma /= a.Length; mb /= b.Length; }
             double ea = 0, eb = 0;
@@ -270,16 +366,26 @@ namespace OFDR_Signal_Core.Processing
             var ws = PreviewReducer.FromSelector(c.SegmentSize, c.MaxPreviewPoints, i => b[i].Magnitude, "FFT bin", "Windowed magnitude");
             var rawr = PreviewReducer.FromSelector(c.SegmentSize, c.MaxPreviewPoints, i => result.ReferenceSpectrumValues[start + i].Magnitude, "FFT bin", "Magnitude");
             var raws = PreviewReducer.FromSelector(c.SegmentSize, c.MaxPreviewPoints, i => result.SignalSpectrumValues[start + i].Magnitude, "FFT bin", "Magnitude");
-            foreach (var v in new[] { wr, ws, rawr, raws }) { v.XStart = start; v.XEnd = start + c.SegmentSize - 1; }
+            foreach (var v in new[] { wr, ws, rawr, raws })
+            {
+                v.XStart = start; v.XEnd = start + c.SegmentSize - 1;
+                if (result.DocumentStages?.StrainEnabled == true)
+                { v.XStart = result.DocumentStages.Points[index].WindowStartMeters; v.XEnd = result.DocumentStages.Points[index].WindowEndMeters; v.XAxisTitle = "위치 (m; 설정 기반)"; }
+            }
             fft.InverseInPlace(a); fft.InverseInPlace(b);
             var ri = PreviewReducer.FromMagnitude(a, c.MaxPreviewPoints, "local sample", "Magnitude"); var si = PreviewReducer.FromMagnitude(b, c.MaxPreviewPoints, "local sample", "Magnitude");
-            Correlate(a, b, c); var lag = Peak(b, c.StageComparison.MaximumLagSamples); var peak = Math.Max(0, Math.Min(n - 1, (int)Math.Round(lag + n / 2.0)));
+            Correlate(a, b, c, CancellationToken.None);
+            var lag = c.StageComparison.Document.Enabled ? StageZncc.Evaluate(b, c.StageComparison.MaximumLagSamples, 0, c.StageComparison.Document).CandidateLag : Peak(b, c.StageComparison.MaximumLagSamples);
+            var peak = ModeHopSettings.IsFinite(lag) ? Math.Max(0, Math.Min(n - 1, (int)Math.Round(lag + n / 2.0))) : n / 2;
             var corr = PreviewReducer.FromSelector(n, c.MaxPreviewPoints, i => b[(i + n / 2) % n].Real, "lag (sample)", "Correlation"); corr.XStart = -n / 2; corr.XEnd = n / 2 - 1;
             var low = Math.Max(0, peak - 128); var high = Math.Min(n - 1, peak + 128);
             var zoom = PreviewReducer.FromSelector(high - low + 1, c.MaxPreviewPoints, i => b[(low + i + n / 2) % n].Real, "lag (sample)", "Correlation"); zoom.XStart = low - n / 2; zoom.XEnd = high - n / 2;
             return new SegmentCorrelationView { SegmentIndex = index, SegmentStartFftBin = start, ReferenceSegment = rawr, SignalSegment = raws,
                 WindowedReferenceSegment = wr, WindowedSignalSegment = ws, ReferenceIfft = ri, SignalIfft = si, Correlation = corr, CorrelationZoom = zoom,
-                PeakIndex = peak, ZeroLagIndex = n / 2, PeakLagBin = (int)Math.Round(lag), PeakLagBins = lag, PeakMagnitude = b[(peak + n / 2) % n].Real, ZoomPeakIndex = peak - low };
+                PeakIndex = peak, ZeroLagIndex = n / 2, PeakLagBin = ModeHopSettings.IsFinite(lag) ? (int)Math.Round(lag) : 0, PeakLagBins = lag, PeakMagnitude = b[(peak + n / 2) % n].Real, ZoomPeakIndex = peak - low,
+                SegmentCenterDistanceMeters = result.DocumentStages?.Points[index].DistanceMeters ?? double.NaN,
+                PeakStrainMicrostrain = result.DocumentStages?.Points[index].CandidateStrainMicrostrain ?? double.NaN,
+                PeakSpectralShiftGHz = result.DocumentStages == null ? double.NaN : lag * result.DocumentStages.FrequencyGHzPerLag };
         }
     }
 }

@@ -16,6 +16,7 @@
     <RadioButton Content="CH1 상승 엣지 사이" GroupName="SweepRangeMode" Margin="0,0,16,0" IsChecked="{Binding UseCompleteSweeps, Mode=TwoWay}" AutomationProperties.AutomationId="SweepUseCompleteSweeps" ToolTip="CH1의 1.8 V 상승 엣지부터 다음 상승 엣지 직전까지의 완전한 스윕을 선택합니다."/>
     <RadioButton Content="기록 시작 → 첫 상승 엣지" GroupName="SweepRangeMode" Margin="0,0,16,0" IsChecked="{Binding UseRecordingStartAsSweepStart, Mode=TwoWay}" AutomationProperties.AutomationId="SweepUseRecordingStart" ToolTip="기록 시작(0 s)부터 첫 CH1 상승 엣지 직전까지를 S1로 추가합니다. 나머지 스윕은 CH1 상승 엣지 사이 구간을 유지합니다."/>
     <RadioButton Content="첫 상승 엣지 → 파일 끝" GroupName="SweepRangeMode" IsChecked="{Binding UseFirstRisingEdgeToRecordEnd, Mode=TwoWay}" AutomationProperties.AutomationId="SweepUseFirstEdgeToEnd" ToolTip="첫 CH1 상승 엣지의 샘플부터 파일의 마지막 샘플까지를 하나의 사용 범위로 지정합니다. 다음 상승 엣지가 없어도 사용할 수 있으며, 중간의 다른 상승 엣지도 포함합니다."/>
+    <RadioButton Content="기록 시작 → 기록 끝" GroupName="SweepRangeMode" Margin="16,0,0,0" IsChecked="{Binding UseWholeRecording, Mode=TwoWay}" AutomationProperties.AutomationId="SweepUseWholeRecording" ToolTip="CH1 상승 엣지 유무와 관계없이 원본의 첫 샘플부터 마지막 샘플까지 전체 기록을 하나의 사용 범위로 지정합니다."/>
    </WrapPanel>
    <WrapPanel>
     <ComboBox Width="100" ItemsSource="{Binding Roles}" SelectedItem="{Binding ActiveRole}" AutomationProperties.AutomationId="SweepRole"/>

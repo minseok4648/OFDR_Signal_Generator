@@ -8,7 +8,8 @@ namespace OFDR_Signal_Core.Models
     {
         CompleteSweeps,
         RecordingStartToFirstEdge,
-        FirstEdgeToRecordingEnd
+        FirstEdgeToRecordingEnd,
+        RecordingStartToRecordingEnd
     }
 
     [DataContract]
@@ -23,7 +24,7 @@ namespace OFDR_Signal_Core.Models
         [DataMember(EmitDefaultValue = false)] public bool EndSpecifiedAtRecordEnd { get; set; }
         public int SampleCount => EndIndexExclusive - StartIndex;
         public double DurationSeconds => EndSeconds - StartSeconds;
-        public string SelectionDescription => EndSpecifiedAtRecordEnd ? "첫 상승 엣지 → 파일 끝 직접 지정" : StartSpecifiedAtRecordStart ? "기록 시작 수동 지정" : "";
+        public string SelectionDescription => StartSpecifiedAtRecordStart && EndSpecifiedAtRecordEnd ? "기록 시작 → 기록 끝 직접 지정" : EndSpecifiedAtRecordEnd ? "첫 상승 엣지 → 파일 끝 직접 지정" : StartSpecifiedAtRecordStart ? "기록 시작 수동 지정" : "";
         public override string ToString() => string.Format(System.Globalization.CultureInfo.InvariantCulture, "S{0}: {1:F7}–{2:F7} s ({3:N0} samples){4}", Number, StartSeconds, EndSeconds, SampleCount, SelectionDescription.Length > 0 ? " · " + SelectionDescription : "");
     }
 
@@ -87,7 +88,7 @@ namespace OFDR_Signal_Core.Models
             var m = Metadata;
             if (m == null || m.SchemaVersion != 1 || (m.Role != "Ref" && m.Role != "Signal") || m.AuxiliaryChannel != 3 || m.MeasurementChannel != 4
                 || m.Sweep == null || m.Sweep.StartIndex < 0 || m.Sweep.EndIndexExclusive <= m.Sweep.StartIndex
-                || (m.Sweep.StartSpecifiedAtRecordStart && m.Sweep.EndSpecifiedAtRecordEnd)
+                || (m.Sweep.StartSpecifiedAtRecordStart && m.Sweep.StartIndex != 0)
                 || !ModeHopSettings.IsFinite(m.SampleIntervalSeconds) || m.SampleIntervalSeconds <= 0 || !ModeHopSettings.IsFinite(m.SourceStartSeconds)
                 || !ModeHopSettings.IsFinite(m.ModeHopThresholdVoltage) || m.SweepThresholdVoltage != 1.8
                 || !ModeHopSettings.IsFinite(m.ModeHopExclusionTailSeconds) || m.ModeHopExclusionTailSeconds < 0
